@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/authStore'
-import { ArrowLeft, User, Mail, Calendar, Trash2 } from 'lucide-react'
+import { User, Mail, Calendar, Trash2 } from 'lucide-react'
 
 export default function Profile() {
   const { user, logout } = useAuth()
@@ -30,15 +30,12 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="flex items-center gap-4 px-6 py-4 border-b">
-        <button onClick={() => navigate('/dashboard')} className="text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <h1 className="text-lg font-semibold">Account Settings</h1>
+    <div className="flex-1 overflow-y-auto">
+      <header className="flex items-center gap-4 px-6 py-3 border-b">
+        <h1 className="text-sm font-medium">Account Settings</h1>
       </header>
 
-      <main className="max-w-2xl mx-auto p-6 space-y-6">
+      <div className="max-w-2xl mx-auto p-6 space-y-6">
         {/* Profile Info Section */}
         <section className="rounded-lg border bg-card">
           <div className="px-6 py-4 border-b">
@@ -50,14 +47,14 @@ export default function Profile() {
               <User className="h-4 w-4 text-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-muted-foreground">Name</p>
-                <p className="text-sm font-medium truncate">{user?.name || '—'}</p>
+                <p className="text-sm font-medium truncate">{user?.name || '--'}</p>
               </div>
             </div>
             <div className="flex items-center gap-4 px-6 py-4">
               <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-muted-foreground">Email</p>
-                <p className="text-sm font-medium truncate">{user?.email || '—'}</p>
+                <p className="text-sm font-medium truncate">{user?.email || '--'}</p>
               </div>
             </div>
             <div className="flex items-center gap-4 px-6 py-4">
@@ -65,7 +62,7 @@ export default function Profile() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-muted-foreground">Member since</p>
                 <p className="text-sm font-medium">
-                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}
+                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' }) : '--'}
                 </p>
               </div>
             </div>
@@ -102,7 +99,7 @@ export default function Profile() {
             </Button>
           </div>
         </section>
-      </main>
+      </div>
 
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>
         <DialogHeader>
