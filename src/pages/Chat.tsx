@@ -2,7 +2,11 @@ import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@/hooks/useChat'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Send, Loader2, WifiOff, Wifi, AlertCircle, X } from 'lucide-react'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Send, Loader2, WifiOff, Wifi, AlertCircle, X, ChevronDown, ChevronRight, Database, Terminal } from 'lucide-react'
+import type { QueryExecution } from '@/stores/chatStore'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 export default function Chat() {
   const { messages, isLoading, sendMessage, connectionStatus, error, clearError } = useChat()
@@ -56,7 +60,7 @@ export default function Chat() {
         {messages.length === 0 ? (
           <EmptyState onSuggestionClick={handleSuggestion} />
         ) : (
-          <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+          <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
             {messages.map((msg) => (
               <div key={msg.id} className="flex gap-3">
                 <div
@@ -82,6 +86,7 @@ export default function Chat() {
                   <p className="text-xs font-medium text-muted-foreground mb-1">
                     {msg.role === 'user' ? 'You' : 'NL2SQL'}
                   </p>
+                  {/* Clean text response */}
                   <div
                     className={`text-sm whitespace-pre-wrap break-words leading-relaxed ${
                       msg.role === 'assistant' && msg.content.startsWith('Error:')
@@ -89,8 +94,12 @@ export default function Chat() {
                         : ''
                     }`}
                   >
-                    <MessageContent content={msg.content} />
+                    <CleanContent content={msg.content} />
                   </div>
+                  {/* Queries dropdown */}
+                  {msg.queries && msg.queries.length > 0 && (
+                    <QueriesDropdown queries={msg.queries} />
+                  )}
                 </div>
               </div>
             ))}
@@ -109,7 +118,7 @@ export default function Chat() {
                   </p>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Generating query...
+                    Querying database...
                   </div>
                 </div>
               </div>
@@ -123,7 +132,7 @@ export default function Chat() {
       <div className="border-t px-4 py-4 shrink-0">
         <form
           onSubmit={handleSubmit}
-          className="max-w-3xl mx-auto flex items-center gap-2"
+          className="max-w-4xl mx-auto flex items-center gap-2"
         >
           <Input
             value={input}
@@ -138,6 +147,17 @@ export default function Chat() {
           </Button>
         </form>
       </div>
+    </div>
+  )
+}
+
+/** Renders the assistant's text as formatted markdown (tables, bold, lists, etc.) */
+function CleanContent({ content }: { content: string }) {
+  if (!content.trim()) return null
+
+  return (
+    <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-table:my-2 prose-th:px-3 prose-th:py-1.5 prose-td:px-3 prose-td:py-1.5 prose-th:text-left prose-th:font-semibold prose-tr:border-b">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </div>
   )
 }
@@ -176,8 +196,8 @@ function EmptyState({ onSuggestionClick }: { onSuggestionClick: (q: string) => v
       />
       <h2 className="text-lg font-semibold mb-2">Ask anything about the database</h2>
       <p className="text-sm text-muted-foreground max-w-md mb-8">
-        Type a natural language question and the AI will generate a SQL query
-        for the food and nutrition database.
+        Type a natural language question and the AI will generate and execute SQL queries
+        on the food and nutrition database.
       </p>
       <div className="grid gap-2 w-full max-w-md">
         {suggestions.map((q) => (
@@ -194,47 +214,125 @@ function EmptyState({ onSuggestionClick }: { onSuggestionClick: (q: string) => v
   )
 }
 
-function MessageContent({ content }: { content: string }) {
-  const parts: { type: 'text' | 'sql'; value: string }[] = []
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-
-  const fencedPattern = /```(\w*)\n([\s\S]*?)```/g
-  while ((match = fencedPattern.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ type: 'text', value: content.slice(lastIndex, match.index) })
-    }
-    parts.push({ type: 'sql', value: match[2].trim() })
-    lastIndex = match.index + match[0].length
-  }
-
-  if (lastIndex < content.length) {
-    const remaining = content.slice(lastIndex)
-    if (/^\s*(SELECT|WITH)\b/i.test(remaining)) {
-      parts.push({ type: 'sql', value: remaining.trim() })
-    } else {
-      parts.push({ type: 'text', value: remaining })
-    }
-  }
-
-  if (parts.length === 0) {
-    parts.push({ type: 'text', value: content })
-  }
+function QueriesDropdown({ queries }: { queries: QueryExecution[] }) {
+  const [open, setOpen] = useState(false)
+  const [expandedQuery, setExpandedQuery] = useState<number | null>(null)
 
   return (
-    <>
-      {parts.map((part, i) =>
-        part.type === 'sql' ? (
-          <pre
-            key={i}
-            className="bg-muted rounded-md p-3 my-2 overflow-x-auto text-xs font-mono"
-          >
-            <code>{part.value}</code>
-          </pre>
-        ) : (
-          <span key={i}>{part.value}</span>
-        )
+    <div className="mt-3 rounded-lg border bg-card overflow-hidden">
+      {/* Toggle button */}
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 w-full px-4 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
+      >
+        {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        <Database className="h-3.5 w-3.5" />
+        <span>
+          {queries.length} {queries.length === 1 ? 'query' : 'queries'} executed
+        </span>
+        {queries.some((q) => q.error) && (
+          <span className="ml-auto text-[10px] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">
+            errors
+          </span>
+        )}
+      </button>
+
+      {/* Expanded query list */}
+      {open && (
+        <div className="border-t">
+          {queries.map((q, i) => (
+            <div key={i} className="border-b last:border-0">
+              {/* Query header */}
+              <button
+                onClick={() => setExpandedQuery(expandedQuery === i ? null : i)}
+                className="flex items-center gap-2 w-full px-4 py-2 text-xs hover:bg-muted/30 transition-colors"
+              >
+                {expandedQuery === i ? (
+                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                )}
+                <Terminal className="h-3 w-3 text-muted-foreground" />
+                <span
+                  className={`font-bold uppercase text-[10px] px-1.5 py-0.5 rounded ${
+                    q.error
+                      ? 'bg-destructive/10 text-destructive'
+                      : q.operation === 'SELECT'
+                        ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        : q.operation === 'INSERT'
+                          ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                          : q.operation === 'UPDATE'
+                            ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+                            : q.operation === 'DELETE'
+                              ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                              : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {q.operation}
+                </span>
+                <span className="text-muted-foreground font-mono truncate flex-1 text-left">
+                  {q.sql.length > 60 ? q.sql.slice(0, 60) + '...' : q.sql}
+                </span>
+                {q.rowCount !== undefined && !q.error && (
+                  <span className="text-[10px] text-muted-foreground ml-auto shrink-0">
+                    {q.rowCount} row{q.rowCount !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </button>
+
+              {/* Expanded: full SQL + results table */}
+              {expandedQuery === i && (
+                <div className="px-4 pb-3 space-y-3">
+                  {/* Raw SQL */}
+                  <pre className="bg-muted/70 rounded-md p-3 overflow-x-auto text-xs font-mono text-foreground">
+                    <code>{q.sql}</code>
+                  </pre>
+
+                  {/* Error */}
+                  {q.error && (
+                    <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/5 rounded-md p-2">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      {q.error}
+                    </div>
+                  )}
+
+                  {/* Results table */}
+                  {q.results && q.results.length > 0 && (
+                    <div className="rounded-md border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            {Object.keys(q.results[0]).map((col) => (
+                              <TableHead key={col} className="text-xs font-semibold whitespace-nowrap">
+                                {col}
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {q.results.map((row, ri) => (
+                            <TableRow key={ri}>
+                              {Object.values(row).map((val, ci) => (
+                                <TableCell key={ci} className="text-xs whitespace-nowrap max-w-[250px] truncate">
+                                  {val === null ? (
+                                    <span className="text-muted-foreground italic">null</span>
+                                  ) : (
+                                    String(val)
+                                  )}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
-    </>
+    </div>
   )
 }

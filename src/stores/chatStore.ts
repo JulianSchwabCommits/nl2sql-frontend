@@ -1,11 +1,22 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+export interface QueryExecution {
+  sql: string
+  operation: string
+  results?: Record<string, unknown>[]
+  error?: string
+  rowCount?: number
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   timestamp: string
+  sql?: string
+  results?: Record<string, unknown>[]
+  queries?: QueryExecution[]
 }
 
 export interface Conversation {
@@ -18,7 +29,8 @@ export interface Conversation {
 interface ChatState {
   conversations: Conversation[]
   activeConversationId: string | null
-  isLoading: boolean
+  // Per-conversation loading state
+  loadingConversations: Set<string>
 
   // Conversation management
   createConversation: () => string
@@ -27,16 +39,18 @@ interface ChatState {
   setActiveConversation: (id: string) => void
 
   // Message management
+  addMessageToConversation: (conversationId: string, msg: Omit<ChatMessage, 'id' | 'timestamp'>) => void
   addMessage: (msg: Omit<ChatMessage, 'id' | 'timestamp'>) => void
-  setLoading: (loading: boolean) => void
+  setLoading: (conversationId: string, loading: boolean) => void
+  isConversationLoading: (conversationId: string) => boolean
 }
 
 export const useChatStore = create<ChatState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       conversations: [],
       activeConversationId: null,
-      isLoading: false,
+      loadingConversations: new Set<string>(),
 
       createConversation: () => {
         const id = crypto.randomUUID()
@@ -60,7 +74,9 @@ export const useChatStore = create<ChatState>()(
             state.activeConversationId === id
               ? filtered[0]?.id ?? null
               : state.activeConversationId
-          return { conversations: filtered, activeConversationId: newActive }
+          const loadingConversations = new Set(state.loadingConversations)
+          loadingConversations.delete(id)
+          return { conversations: filtered, activeConversationId: newActive, loadingConversations }
         }),
 
       renameConversation: (id, title) =>
@@ -72,11 +88,8 @@ export const useChatStore = create<ChatState>()(
 
       setActiveConversation: (id) => set({ activeConversationId: id }),
 
-      addMessage: (msg) =>
+      addMessageToConversation: (conversationId, msg) =>
         set((state) => {
-          const activeId = state.activeConversationId
-          if (!activeId) return state
-
           const message: ChatMessage = {
             ...msg,
             id: crypto.randomUUID(),
@@ -85,9 +98,8 @@ export const useChatStore = create<ChatState>()(
 
           return {
             conversations: state.conversations.map((c) => {
-              if (c.id !== activeId) return c
+              if (c.id !== conversationId) return c
               const messages = [...c.messages, message]
-              // Auto-title from first user message
               const title =
                 c.title === 'New Chat' && msg.role === 'user'
                   ? msg.content.slice(0, 40) + (msg.content.length > 40 ? '...' : '')
@@ -97,10 +109,33 @@ export const useChatStore = create<ChatState>()(
           }
         }),
 
-      setLoading: (isLoading) => set({ isLoading }),
+      addMessage: (msg) => {
+        const activeId = get().activeConversationId
+        if (!activeId) return
+        get().addMessageToConversation(activeId, msg)
+      },
+
+      setLoading: (conversationId, loading) =>
+        set((state) => {
+          const loadingConversations = new Set(state.loadingConversations)
+          if (loading) {
+            loadingConversations.add(conversationId)
+          } else {
+            loadingConversations.delete(conversationId)
+          }
+          return { loadingConversations }
+        }),
+
+      isConversationLoading: (conversationId) => {
+        return get().loadingConversations.has(conversationId)
+      },
     }),
     {
       name: 'chat-storage',
+      partialize: (state) => ({
+        conversations: state.conversations,
+        activeConversationId: state.activeConversationId,
+      }),
     }
   )
 )

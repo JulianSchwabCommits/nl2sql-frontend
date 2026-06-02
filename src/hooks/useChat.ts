@@ -10,14 +10,14 @@ type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
 export function useChat() {
   const socketRef = useRef<Socket | null>(null)
-  const { accessToken } = useAuthStore()
+  const { accessToken, refreshAccessToken } = useAuthStore()
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected')
   const [error, setError] = useState<string | null>(null)
   const {
     conversations,
     activeConversationId,
-    isLoading,
-    addMessage,
+    loadingConversations,
+    addMessageToConversation,
     setLoading,
     createConversation,
     deleteConversation,
@@ -28,6 +28,10 @@ export function useChat() {
   const activeConversation = conversations.find(
     (c) => c.id === activeConversationId
   )
+
+  const isLoading = activeConversationId
+    ? loadingConversations.has(activeConversationId)
+    : false
 
   useEffect(() => {
     if (!accessToken) {
@@ -51,16 +55,26 @@ export function useChat() {
       setError(null)
     })
 
-    socket.on('agent:response', (data: { reply: string }) => {
-      addMessage({ role: 'assistant', content: data.reply })
-      setLoading(false)
+    socket.on('agent:response', (data: { reply: string; queries?: any[]; _conversationId?: string }) => {
+      const convId = data._conversationId || useChatStore.getState().activeConversationId
+      if (convId) {
+        addMessageToConversation(convId, {
+          role: 'assistant',
+          content: data.reply,
+          queries: data.queries || [],
+        })
+        setLoading(convId, false)
+      }
       setError(null)
     })
 
-    socket.on('agent:error', (data: { message: string }) => {
+    socket.on('agent:error', (data: { message: string; _conversationId?: string }) => {
       const errorMsg = data.message || 'An unknown error occurred'
-      addMessage({ role: 'assistant', content: `Error: ${errorMsg}` })
-      setLoading(false)
+      const convId = data._conversationId || useChatStore.getState().activeConversationId
+      if (convId) {
+        addMessageToConversation(convId, { role: 'assistant', content: `Error: ${errorMsg}` })
+        setLoading(convId, false)
+      }
       setError(errorMsg)
     })
 
@@ -73,7 +87,7 @@ export function useChat() {
     socket.on('disconnect', (reason) => {
       setConnectionStatus('disconnected')
       if (reason === 'io server disconnect') {
-        setError('Disconnected by server (token may be expired)')
+        refreshAccessToken()
       }
     })
 
@@ -100,32 +114,46 @@ export function useChat() {
     }
   }, [accessToken])
 
-  // HTTP fallback for when WebSocket is not connected
   const sendViaHttp = useCallback(
-    async (prompt: string) => {
+    async (prompt: string, conversationId: string) => {
       try {
-        const response = await axios.post<{ reply: string }>(
+        const currentConv = useChatStore.getState().conversations.find(
+          (c) => c.id === conversationId
+        )
+        const history = (currentConv?.messages ?? [])
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .slice(-20)
+          .map((m) => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            content: m.content,
+          }))
+
+        const response = await axios.post<{ reply: string; queries?: any[] }>(
           `${API_URL}/agent/chat`,
-          { prompt },
+          { prompt, history },
           {
             headers: { Authorization: `Bearer ${accessToken}` },
             timeout: 30000,
           }
         )
-        addMessage({ role: 'assistant', content: response.data.reply })
+        addMessageToConversation(conversationId, {
+          role: 'assistant',
+          content: response.data.reply,
+          queries: response.data.queries || [],
+        })
         setError(null)
       } catch (err: any) {
         const errorMsg =
           err.response?.data?.message ||
           err.message ||
           'Failed to get response'
-        addMessage({ role: 'assistant', content: `Error: ${errorMsg}` })
+        addMessageToConversation(conversationId, { role: 'assistant', content: `Error: ${errorMsg}` })
         setError(errorMsg)
       } finally {
-        setLoading(false)
+        setLoading(conversationId, false)
       }
     },
-    [accessToken, addMessage, setLoading]
+    [accessToken, addMessageToConversation, setLoading]
   )
 
   const sendMessage = useCallback(
@@ -133,43 +161,55 @@ export function useChat() {
       if (!prompt.trim()) return
 
       // Auto-create conversation if none active
-      if (!activeConversationId) {
-        createConversation()
+      let convId = activeConversationId
+      if (!convId) {
+        convId = createConversation()
       }
 
-      addMessage({ role: 'user', content: prompt })
-      setLoading(true)
+      addMessageToConversation(convId, { role: 'user', content: prompt })
+      setLoading(convId, true)
       setError(null)
 
       // Try WebSocket first, fall back to HTTP
       if (socketRef.current?.connected) {
-        socketRef.current.emit('agent:chat', { prompt })
+        const currentConv = useChatStore.getState().conversations.find(
+          (c) => c.id === convId
+        )
+        const history = (currentConv?.messages ?? [])
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .slice(-20)
+          .map((m) => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            content: m.content,
+          }))
 
-        // Timeout: if no response in 30s, show error
+        socketRef.current.emit('agent:chat', { prompt, history, _conversationId: convId })
+
+        // Timeout: if no response in 60s, show error
+        const targetConvId = convId
         const timeout = setTimeout(() => {
-          if (useChatStore.getState().isLoading) {
-            addMessage({
+          if (useChatStore.getState().loadingConversations.has(targetConvId)) {
+            addMessageToConversation(targetConvId, {
               role: 'assistant',
               content: 'Error: Request timed out. The server took too long to respond.',
             })
-            setLoading(false)
+            setLoading(targetConvId, false)
             setError('Request timed out')
           }
-        }, 30000)
+        }, 60000)
 
-        // Clear timeout when response arrives (via store subscription)
+        // Clear timeout when this conversation stops loading
         const unsub = useChatStore.subscribe((state) => {
-          if (!state.isLoading) {
+          if (!state.loadingConversations.has(targetConvId)) {
             clearTimeout(timeout)
             unsub()
           }
         })
       } else {
-        // Fallback to HTTP
-        sendViaHttp(prompt)
+        sendViaHttp(prompt, convId)
       }
     },
-    [activeConversationId, addMessage, setLoading, createConversation, sendViaHttp]
+    [activeConversationId, addMessageToConversation, setLoading, createConversation, sendViaHttp]
   )
 
   const clearError = useCallback(() => setError(null), [])
