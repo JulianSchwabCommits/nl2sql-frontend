@@ -78,6 +78,13 @@ export function useChat() {
       setError(errorMsg)
     })
 
+    socket.on('agent:cancelled', (data: { _conversationId?: string }) => {
+      const convId = data._conversationId || useChatStore.getState().activeConversationId
+      if (convId) {
+        setLoading(convId, false)
+      }
+    })
+
     socket.on('connect_error', (err) => {
       console.error('WebSocket connection error:', err.message)
       setConnectionStatus('error')
@@ -203,10 +210,24 @@ export function useChat() {
 
   const clearError = useCallback(() => setError(null), [])
 
+  const cancelMessage = useCallback(() => {
+    if (!activeConversationId) return
+    if (!loadingConversations.has(activeConversationId)) return
+
+    // Emit cancel event to backend
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('agent:cancel')
+    }
+
+    // Immediately stop loading on the client side
+    setLoading(activeConversationId, false)
+  }, [activeConversationId, loadingConversations, setLoading])
+
   return {
     messages: activeConversation?.messages ?? [],
     isLoading,
     sendMessage,
+    cancelMessage,
     conversations,
     activeConversationId,
     createConversation,
