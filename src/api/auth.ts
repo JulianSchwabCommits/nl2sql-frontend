@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AuthResponse, LoginDto, RegisterDto, User } from '@/types/auth'
+import type { AuthResponse, LoginDto, RegisterDto, SignupResponse, User } from '@/types/auth'
 import { useAuthStore } from '@/stores/authStore'
 
 const api = axios.create({
@@ -21,7 +21,9 @@ api.interceptors.response.use(
     const originalRequest = error.config
     if (
       (error.response?.status === 401 || error.response?.status === 403) &&
-      !originalRequest._retry
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/login') &&
+      !originalRequest.url?.includes('/auth/signup')
     ) {
       originalRequest._retry = true
       try {
@@ -45,7 +47,7 @@ api.interceptors.response.use(
 
 export const authApi = {
   login: (dto: LoginDto) => api.post<AuthResponse>('/auth/login', dto),
-  signup: (dto: RegisterDto) => api.post<AuthResponse>('/auth/signup', dto),
+  signup: (dto: RegisterDto) => api.post<SignupResponse>('/auth/signup', dto),
   refresh: () => api.post<AuthResponse>('/auth/refresh'),
   logout: () => api.post('/auth/logout'),
   profile: () => api.get<User>('/auth/profile'),

@@ -3,13 +3,13 @@ import { useChat } from '@/hooks/useChat'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { Send, Loader2, WifiOff, Wifi, AlertCircle, X, ChevronDown, ChevronRight, Database, Terminal } from 'lucide-react'
+import { Send, Loader2, WifiOff, Wifi, AlertCircle, X, ChevronDown, ChevronRight, Database, Terminal, Square } from 'lucide-react'
 import type { QueryExecution } from '@/stores/chatStore'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 export default function Chat() {
-  const { messages, isLoading, sendMessage, connectionStatus, error, clearError } = useChat()
+  const { messages, isLoading, sendMessage, cancelMessage, connectionStatus, error, clearError } = useChat()
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -142,9 +142,21 @@ export default function Chat() {
             className="flex-1"
             autoFocus
           />
-          <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
-            <Send className="h-4 w-4" />
-          </Button>
+          {isLoading ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="destructive"
+              onClick={cancelMessage}
+              title="Cancel"
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button type="submit" size="icon" disabled={!input.trim()}>
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
         </form>
       </div>
     </div>
