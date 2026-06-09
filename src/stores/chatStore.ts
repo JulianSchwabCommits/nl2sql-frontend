@@ -31,9 +31,12 @@ interface ChatState {
   activeConversationId: string | null
   // Per-conversation loading state
   loadingConversations: Set<string>
+  hasFetched: boolean
 
   // Conversation management
   createConversation: () => string
+  createConversationWithId: (id: string, title?: string) => void
+  setConversations: (conversations: Conversation[]) => void
   deleteConversation: (id: string) => void
   renameConversation: (id: string, title: string) => void
   setActiveConversation: (id: string) => void
@@ -51,6 +54,10 @@ export const useChatStore = create<ChatState>()(
       conversations: [],
       activeConversationId: null,
       loadingConversations: new Set<string>(),
+      hasFetched: false,
+
+      setConversations: (conversations) =>
+        set({ conversations, hasFetched: true }),
 
       createConversation: () => {
         const id = crypto.randomUUID()
@@ -65,6 +72,19 @@ export const useChatStore = create<ChatState>()(
           activeConversationId: id,
         }))
         return id
+      },
+
+      createConversationWithId: (id, title = 'New Chat') => {
+        const conversation: Conversation = {
+          id,
+          title,
+          messages: [],
+          createdAt: new Date().toISOString(),
+        }
+        set((state) => ({
+          conversations: [conversation, ...state.conversations],
+          activeConversationId: id,
+        }))
       },
 
       deleteConversation: (id) =>

@@ -55,8 +55,8 @@ export function useChat() {
       setError(null)
     })
 
-    socket.on('agent:response', (data: { reply: string; queries?: any[]; _conversationId?: string }) => {
-      const convId = data._conversationId || useChatStore.getState().activeConversationId
+    socket.on('agent:response', (data: { reply: string; queries?: any[]; conversationId?: string }) => {
+      const convId = data.conversationId || useChatStore.getState().activeConversationId
       if (convId) {
         addMessageToConversation(convId, {
           role: 'assistant',
@@ -68,9 +68,9 @@ export function useChat() {
       setError(null)
     })
 
-    socket.on('agent:error', (data: { message: string; _conversationId?: string }) => {
+    socket.on('agent:error', (data: { message: string; conversationId?: string }) => {
       const errorMsg = data.message || 'An unknown error occurred'
-      const convId = data._conversationId || useChatStore.getState().activeConversationId
+      const convId = data.conversationId || useChatStore.getState().activeConversationId
       if (convId) {
         addMessageToConversation(convId, { role: 'assistant', content: `Error: ${errorMsg}` })
         setLoading(convId, false)
@@ -172,18 +172,7 @@ export function useChat() {
 
       // Try WebSocket first, fall back to HTTP
       if (socketRef.current?.connected) {
-        const currentConv = useChatStore.getState().conversations.find(
-          (c) => c.id === convId
-        )
-        const history = (currentConv?.messages ?? [])
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .slice(-20)
-          .map((m) => ({
-            role: m.role === 'user' ? 'user' : 'model',
-            content: m.content,
-          }))
-
-        socketRef.current.emit('agent:chat', { prompt, history, _conversationId: convId })
+        socketRef.current.emit('agent:chat', { prompt, conversationId: convId })
 
         // Timeout: if no response in 60s, show error
         const targetConvId = convId
