@@ -64,8 +64,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: build
-    # Only run on develop branch pushes, not on PRs
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    # Run on develop branch pushes and manual workflow_dispatch, not on PRs
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop'
     
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
@@ -137,8 +137,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [build, docker]
-    # Only run if docker build succeeded
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    # Run on develop branch pushes and manual workflow_dispatch
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop'
 
     steps:
       - name: Checkout code
