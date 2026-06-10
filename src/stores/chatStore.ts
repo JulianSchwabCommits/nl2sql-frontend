@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { generateUUID } from '@/lib/utils'
 
 export interface QueryExecution {
   sql: string
@@ -67,7 +68,7 @@ export const useChatStore = create<ChatState>()(
         set({ conversations, hasFetched: true }),
 
       createConversation: () => {
-        const id = crypto.randomUUID()
+        const id = generateUUID()
         const conversation: Conversation = {
           id,
           title: 'New Chat',
@@ -119,7 +120,7 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           const message: ChatMessage = {
             ...msg,
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             timestamp: new Date().toISOString(),
           }
 

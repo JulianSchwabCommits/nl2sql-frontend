@@ -1,0 +1,39 @@
+# Copy this file to terraform.tfvars and adjust values as needed
+# terraform.tfvars is gitignored
+
+# AWS Configuration
+aws_region  = "eu-central-2"
+environment = "prod"
+
+# Project
+project_name = "nl2sql"
+
+# Network Configuration (from backend terraform outputs)
+# Run: cd ../nl2sql-backend/terraform && terraform output
+vpc_id             = "vpc-xxxxxxxxx"  # Get from backend: terraform output vpc_id
+public_subnet_ids  = ["subnet-xxx", "subnet-yyy"]  # Get from backend: terraform output public_subnet_ids
+backend_alb_security_group_id = "sg-xxxxxxxxx"  # Get from backend terraform state
+
+# Backend API Configuration
+backend_api_url = "http://nl2sql-prod-alb-1537341742.eu-central-2.elb.amazonaws.com"
+
+# ECS Configuration
+ecs_task_cpu                  = 256   # 0.25 vCPU (frontend needs less than backend)
+ecs_task_memory               = 512   # 512 MB
+ecs_desired_count             = 1
+ecs_enable_container_insights = false
+ecs_log_retention_days        = 7
+
+# Application
+app_port       = 80
+app_image_tag  = "latest"
+
+# Domain & SSL (optional)
+domain_name         = ""  # Set your domain, e.g., "app.example.com"
+acm_certificate_arn = ""  # Set your ACM certificate ARN
+
+# ALB
+alb_enable_deletion_protection = false
+
+# Network Access
+allowed_cidr_blocks = ["0.0.0.0/0"]  # Allow public access

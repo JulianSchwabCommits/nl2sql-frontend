@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/authStore'
 import { useChatStore } from '@/stores/chatStore'
+import { generateUUID } from '@/lib/utils'
 import type { Conversation } from '@/stores/chatStore'
 
 const API_URL = import.meta.env.VITE_API_URL
@@ -43,7 +44,7 @@ export function useChatApi() {
   }, [setConversations])
 
   const createConversation = useCallback(async (): Promise<string> => {
-    const id = crypto.randomUUID()
+    const id = generateUUID()
     const title = 'New Chat'
 
     // Optimistic local update
