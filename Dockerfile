@@ -1,5 +1,5 @@
 FROM node:20-alpine AS build
-ARG VITE_API_URL=http://nl2sql-alb-1832098384.eu-central-2.elb.amazonaws.com
+ARG VITE_API_URL=http://localhost:3000
 ENV VITE_API_URL=$VITE_API_URL
 WORKDIR /app
 COPY package.json package-lock.json ./
