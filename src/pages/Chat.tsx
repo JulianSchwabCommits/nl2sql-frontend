@@ -1,15 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@/hooks/useChat'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { Send, Loader2, WifiOff, Wifi, AlertCircle, X, ChevronDown, ChevronRight, Database, Terminal, Square } from 'lucide-react'
+import { ArrowUp, Loader2, AlertCircle, X, ChevronDown, ChevronRight, Database, Terminal, Square } from 'lucide-react'
 import type { QueryExecution } from '@/stores/chatStore'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import TextareaAutosize from 'react-textarea-autosize'
+import { useAuthStore } from '@/stores/authStore'
 
 export default function Chat() {
-  const { messages, isLoading, sendMessage, cancelMessage, connectionStatus, error, clearError } = useChat()
+  const { messages, isLoading, sendMessage, cancelMessage, error, clearError } = useChat()
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -31,19 +32,6 @@ export default function Chat() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-3 border-b shrink-0">
-        <div className="flex items-center gap-2">
-          <img
-            src="/nl2sql_logo_only_picture.png"
-            alt="NL2SQL"
-            className="h-5 w-5 object-contain"
-          />
-          <h1 className="text-sm font-medium">Natural Language to SQL</h1>
-        </div>
-        <ConnectionIndicator status={connectionStatus} />
-      </header>
-
       {/* Error banner */}
       {error && (
         <div className="flex items-center gap-2 px-4 py-2 bg-destructive/10 border-b border-destructive/20 text-destructive text-sm shrink-0">
@@ -58,7 +46,14 @@ export default function Chat() {
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
-          <EmptyState onSuggestionClick={handleSuggestion} />
+          <EmptyState
+            onSuggestionClick={handleSuggestion}
+            input={input}
+            setInput={setInput}
+            handleSubmit={handleSubmit}
+            isLoading={isLoading}
+            cancelMessage={cancelMessage}
+          />
         ) : (
           <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
             {messages.map((msg) => (
@@ -128,37 +123,57 @@ export default function Chat() {
         )}
       </div>
 
-      {/* Input area */}
-      <div className="border-t px-4 py-4 shrink-0">
+      {/* Input area - only show when there are messages */}
+      {messages.length > 0 && (
+        <div className="px-4 py-4 shrink-0">
         <form
           onSubmit={handleSubmit}
-          className="max-w-4xl mx-auto flex items-center gap-2"
+          className="max-w-4xl mx-auto relative"
         >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question about the database..."
-            disabled={isLoading}
-            className="flex-1"
-            autoFocus
-          />
-          {isLoading ? (
-            <Button
-              type="button"
-              size="icon"
-              variant="destructive"
-              onClick={cancelMessage}
-              title="Cancel"
-            >
-              <Square className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button type="submit" size="icon" disabled={!input.trim()}>
-              <Send className="h-4 w-4" />
-            </Button>
-          )}
+          <div className="relative flex items-center gap-1 rounded-[28px] border border-input bg-background pl-5 pr-2 py-2 shadow-sm focus-within:ring-1 focus-within:ring-ring">
+            <TextareaAutosize
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  if (input.trim() && !isLoading) {
+                    handleSubmit(e)
+                  }
+                }
+              }}
+              placeholder="Ask a question about the database..."
+              disabled={isLoading}
+              minRows={1}
+              maxRows={6}
+              className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50 pl-1"
+              autoFocus
+            />
+            {isLoading ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="destructive"
+                onClick={cancelMessage}
+                title="Cancel"
+                className="h-10 w-10 rounded-full shrink-0"
+              >
+                <Square className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                size="icon"
+                disabled={!input.trim()}
+                className="h-10 w-10 rounded-full shrink-0"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </form>
       </div>
+      )}
     </div>
   )
 }
@@ -174,48 +189,100 @@ function CleanContent({ content }: { content: string }) {
   )
 }
 
-function ConnectionIndicator({ status }: { status: string }) {
-  const config = {
-    connected: { icon: Wifi, className: 'text-green-500', label: 'Connected' },
-    connecting: { icon: Wifi, className: 'text-yellow-500 animate-pulse', label: 'Connecting...' },
-    disconnected: { icon: WifiOff, className: 'text-muted-foreground', label: 'Disconnected' },
-    error: { icon: WifiOff, className: 'text-destructive', label: 'Connection error' },
-  }[status] ?? { icon: WifiOff, className: 'text-muted-foreground', label: 'Unknown' }
+// function ConnectionIndicator({ status }: { status: string }) {
+//   const config = {
+//     connected: { icon: Wifi, className: 'text-green-500', label: 'Connected' },
+//     connecting: { icon: Wifi, className: 'text-yellow-500 animate-pulse', label: 'Connecting...' },
+//     disconnected: { icon: WifiOff, className: 'text-muted-foreground', label: 'Disconnected' },
+//     error: { icon: WifiOff, className: 'text-destructive', label: 'Connection error' },
+//   }[status] ?? { icon: WifiOff, className: 'text-muted-foreground', label: 'Unknown' }
 
-  const Icon = config.icon
+//   const Icon = config.icon
 
-  return (
-    <div className="flex items-center gap-1.5" title={config.label}>
-      <Icon className={`h-3.5 w-3.5 ${config.className}`} />
-      <span className={`text-xs ${config.className}`}>{config.label}</span>
-    </div>
-  )
+//   return (
+//     <div className="flex items-center gap-1.5" title={config.label}>
+//       <Icon className={`h-3.5 w-3.5 ${config.className}`} />
+//       <span className={`text-xs ${config.className}`}>{config.label}</span>
+//     </div>
+//   )
+// }
+
+interface EmptyStateProps {
+  onSuggestionClick: (q: string) => void
+  input: string
+  setInput: (value: string) => void
+  handleSubmit: (e: React.FormEvent) => void
+  isLoading: boolean
+  cancelMessage: () => void
 }
 
-function EmptyState({ onSuggestionClick }: { onSuggestionClick: (q: string) => void }) {
+function EmptyState({ onSuggestionClick, input, setInput, handleSubmit, isLoading, cancelMessage }: EmptyStateProps) {
+  const user = useAuthStore((state) => state.user)
   const suggestions = [
-    'What foods have the most vitamin C?',
     'Show me all food categories',
-    'Which foods have more than 20g of protein per 100g?',
+    'Whats the fdcId 321358?',
   ]
 
   return (
     <div className="flex flex-col items-center justify-center h-full text-center px-4">
-      <img
-        src="/nl2sql_logo_full.png"
-        alt="NL2SQL"
-        className="h-16 object-contain mb-6"
-      />
-      <h2 className="text-lg font-semibold mb-2">Ask anything about the database</h2>
-      <p className="text-sm text-muted-foreground max-w-md mb-8">
-        Type a natural language question and the AI will generate and execute SQL queries
-        on the food and nutrition database.
-      </p>
-      <div className="grid gap-2 w-full max-w-md">
+      <h1 className="text-3xl font-semibold mb-12 text-foreground">
+        Good to see you, {user?.name || 'there'}.
+      </h1>
+
+      {/* Input bar */}
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-3xl mb-6"
+      >
+        <div className="relative flex items-center gap-1 rounded-[28px] border border-input bg-background pl-5 pr-2 py-2 shadow-sm focus-within:ring-1 focus-within:ring-ring">
+          <TextareaAutosize
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                if (input.trim() && !isLoading) {
+                  handleSubmit(e)
+                }
+              }
+            }}
+            placeholder="Ask a question about the database..."
+            disabled={isLoading}
+            minRows={1}
+            maxRows={6}
+            className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50 pl-1"
+            autoFocus
+          />
+          {isLoading ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="destructive"
+              onClick={cancelMessage}
+              title="Cancel"
+              className="h-10 w-10 rounded-full shrink-0"
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!input.trim()}
+              className="h-10 w-10 rounded-full shrink-0"
+            >
+              <ArrowUp className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </form>
+
+      {/* Suggestion bubbles */}
+      <div className="flex flex-wrap gap-3 justify-center max-w-3xl">
         {suggestions.map((q) => (
           <button
             key={q}
-            className="text-left text-sm px-4 py-3 rounded-lg border hover:bg-accent transition-colors"
+            className="text-sm px-5 py-2.5 rounded-full border border-input hover:bg-accent transition-colors"
             onClick={() => onSuggestionClick(q)}
           >
             {q}

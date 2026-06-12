@@ -10,9 +10,9 @@ interface DialogProps {
 export function Dialog({ open, onClose, children }: DialogProps) {
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className={cn('relative z-50 w-full max-w-md rounded-lg border bg-background p-6 shadow-lg animate-in fade-in-0 zoom-in-95')}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-50 w-full animate-in fade-in-0 zoom-in-95">
         {children}
       </div>
     </div>

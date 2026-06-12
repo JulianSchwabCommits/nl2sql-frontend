@@ -24,6 +24,7 @@ import {
   Search,
   PanelLeftClose,
 } from 'lucide-react'
+import { Dialog } from '@/components/ui/dialog'
 
 export function AppLayout() {
   const { user, logout } = useAuth()
@@ -41,6 +42,8 @@ export function AppLayout() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const handleLogout = async () => {
     await logout()
@@ -130,11 +133,11 @@ export function AppLayout() {
               </Button>
 
               <Button
+                onClick={() => setIsSearchOpen(true)}
                 variant="ghost"
                 size="icon"
                 className="w-full h-10"
                 title="Search chats"
-                disabled
               >
                 <Search className="h-4 w-4" />
               </Button>
@@ -206,14 +209,13 @@ export function AppLayout() {
                 New chat
               </Button>
 
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search chats"
-                  className="pl-9 h-10"
-                  disabled
-                />
-              </div>
+              <button
+                onClick={() => setIsSearchOpen(true)}
+                className="relative w-full h-10 flex items-center gap-2 px-3 rounded-md border border-input bg-secondary text-muted-foreground hover:bg-accent transition-colors"
+              >
+                <Search className="h-4 w-4" />
+                <span className="text-sm">Search chats</span>
+              </button>
             </div>
 
             {/* Chat list */}
@@ -345,6 +347,73 @@ export function AppLayout() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Outlet />
       </main>
+
+      {/* Search Modal */}
+      <Dialog open={isSearchOpen} onClose={() => setIsSearchOpen(false)}>
+        <div className="relative w-full max-w-2xl mx-auto bg-card rounded-xl border shadow-2xl overflow-hidden">
+          {/* Search Header */}
+          <div className="flex items-center gap-3 px-4 py-3 border-b">
+            <Search className="h-5 w-5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search chats..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+              autoFocus
+            />
+            <button
+              onClick={() => setIsSearchOpen(false)}
+              className="p-1.5 rounded-md hover:bg-accent transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Search Content */}
+          <div className="max-h-[60vh] overflow-y-auto">
+            {/* New Chat Button */}
+            <button
+              onClick={() => {
+                handleNewChat()
+                setIsSearchOpen(false)
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent transition-colors border-b"
+            >
+              <SquarePen className="h-5 w-5" />
+              <span className="font-medium">New chat</span>
+            </button>
+
+            {/* Chat List */}
+            {conversations.length === 0 ? (
+              <div className="px-4 py-12 text-center">
+                <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+                <p className="text-sm text-muted-foreground">No chats yet</p>
+              </div>
+            ) : (
+              conversations
+                .filter((conv) => {
+                  if (!searchQuery) return true
+                  return conv.title.toLowerCase().includes(searchQuery.toLowerCase())
+                })
+                .map((conv) => (
+                  <button
+                    key={conv.id}
+                    onClick={() => {
+                      handleSelectChat(conv.id)
+                      setIsSearchOpen(false)
+                      setSearchQuery('')
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent transition-colors text-left"
+                  >
+                    <MessageSquare className="h-5 w-5 shrink-0" />
+                    <span className="truncate">{conv.title}</span>
+                  </button>
+                ))
+            )}
+          </div>
+        </div>
+      </Dialog>
     </div>
   )
 }
