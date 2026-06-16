@@ -73,7 +73,7 @@ export default function Chat() {
                     <img
                       src="/nl2sql_logo_only_picture.png"
                       alt=""
-                      className="h-4 w-4 object-contain"
+                      className="h-6 w-6 object-contain"
                     />
                   )}
                 </div>

@@ -50,20 +50,22 @@ export default function Register() {
   if (success) {
     return (
       <AuthLayout>
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-6 w-6 text-green-500" />
-              <CardTitle>Registration Successful</CardTitle>
+        <Card className="rounded-[28px] border-input">
+          <CardHeader className="text-center pt-8 pb-6">
+            <div className="flex justify-center mb-2">
+              <div className="h-12 w-12 rounded-full bg-green-500/10 flex items-center justify-center">
+                <CheckCircle2 className="h-6 w-6 text-green-500" />
+              </div>
             </div>
+            <CardTitle className="text-2xl">Registration Successful</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-muted-foreground">
-              Your account has been created and is pending approval by an administrator. 
+          <CardContent className="px-8 pb-8 space-y-4">
+            <p className="text-center text-muted-foreground">
+              Your account has been created and is pending approval by an administrator.
               You will be able to log in once your account is approved.
             </p>
             <Link to="/login">
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full rounded-full">
                 Back to Login
               </Button>
             </Link>
@@ -75,12 +77,12 @@ export default function Register() {
 
   return (
     <AuthLayout>
-      <Card>
-        <CardHeader>
-          <CardTitle>Register</CardTitle>
-          <CardDescription>Create a new account</CardDescription>
+      <Card className="rounded-[28px] border-input">
+        <CardHeader className="text-center pt-8 pb-6">
+          <CardTitle className="text-2xl">Create an account</CardTitle>
+          <CardDescription>Register to get started</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-8 pb-8">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -90,7 +92,7 @@ export default function Register() {
                   <FormItem>
                     <FormLabel>Name (optional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your name" {...field} />
+                      <Input placeholder="Your name" className="rounded-full" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -103,7 +105,12 @@ export default function Register() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="you@example.com" {...field} />
+                      <Input
+                        type="email"
+                        placeholder="you@example.com"
+                        className="rounded-full"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -116,21 +123,30 @@ export default function Register() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
+                      <Input
+                        type="password"
+                        placeholder="••••••••"
+                        className="rounded-full"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+              {error && <p className="text-sm text-destructive text-center">{error}</p>}
+              <Button
+                type="submit"
+                className="w-full rounded-full mt-6"
+                disabled={form.formState.isSubmitting}
+              >
                 {form.formState.isSubmitting ? 'Creating account...' : 'Register'}
               </Button>
             </form>
           </Form>
-          <p className="mt-4 text-center text-sm text-muted-foreground">
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             Already have an account?{' '}
-            <Link to="/login" className="underline text-primary">
+            <Link to="/login" className="font-medium text-primary hover:underline">
               Login
             </Link>
           </p>

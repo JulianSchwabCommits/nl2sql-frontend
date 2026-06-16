@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import {
   LogOut,
@@ -23,6 +24,7 @@ import {
   X,
   Search,
   PanelLeftClose,
+  Shield,
 } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 
@@ -107,7 +109,7 @@ export function AppLayout() {
               <img
                 src="/nl2sql_logo_only_picture.png"
                 alt="NL2SQL"
-                className="h-8 w-8 object-contain group-hover:opacity-0 transition-opacity"
+                className="h-10 w-10 object-contain group-hover:opacity-0 transition-opacity"
               />
             </div>
 
@@ -163,6 +165,16 @@ export function AppLayout() {
                     <Settings className="mr-2 h-4 w-4" />
                     Profile Settings
                   </DropdownMenuItem>
+                  {user?.role === 'ADMIN' && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => navigate('/admin')}>
+                        <Shield className="mr-2 h-4 w-4" />
+                        Admin Panel
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     Log out
@@ -179,12 +191,7 @@ export function AppLayout() {
                 <img
                   src="/nl2sql_logo_only_picture.png"
                   alt="NL2SQL"
-                  className="h-6 w-6 object-contain"
-                />
-                <img
-                  src="/nl2sql_logo_only_schriftzug.png"
-                  alt="NL2SQL"
-                  className="h-4 object-contain"
+                  className="h-8 w-8 object-contain"
                 />
               </div>
               <Button
@@ -332,6 +339,16 @@ export function AppLayout() {
                     <Settings className="mr-2 h-4 w-4" />
                     Profile Settings
                   </DropdownMenuItem>
+                  {user?.role === 'ADMIN' && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => navigate('/admin')}>
+                        <Shield className="mr-2 h-4 w-4" />
+                        Admin Panel
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     Log out

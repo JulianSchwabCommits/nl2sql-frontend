@@ -56,6 +56,31 @@ export const adminService = {
     return data
   },
 
+  deleteUser: async (userId: string) => {
+    const { data } = await adminApi.delete<{ message: string }>(`/users/${userId}`)
+    return data
+  },
+
+  updateUserName: async (userId: string, name: string) => {
+    const { data } = await adminApi.patch<{ message: string }>(`/users/${userId}/name`, { name })
+    return data
+  },
+
+  updateUserEmail: async (userId: string, email: string) => {
+    const { data } = await adminApi.patch<{ message: string }>(`/users/${userId}/email`, { email })
+    return data
+  },
+
+  updateUserRole: async (userId: string, role: 'USER' | 'ADMIN') => {
+    const { data } = await adminApi.patch<{ message: string }>(`/users/${userId}/role`, { role })
+    return data
+  },
+
+  resetUserPassword: async (userId: string, password: string) => {
+    const { data } = await adminApi.patch<{ message: string }>(`/users/${userId}/password`, { password })
+    return data
+  },
+
   isLoggedIn: () => {
     return !!localStorage.getItem('admin_token')
   },

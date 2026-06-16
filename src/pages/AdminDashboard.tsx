@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '@/hooks/useAuth'
 import { adminService } from '@/api/admin'
 import type { PendingUser, AdminUser } from '@/types/auth'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -12,22 +16,40 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { LogOut, UserCheck, UserX, Users, Clock, Shield } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { UserCheck, UserX, Users, Clock, MoreVertical, Edit, Trash2, Key, Shield, User as UserIcon } from 'lucide-react'
+
+type EditUserDialog = {
+  open: boolean
+  user: AdminUser | null
+  field: 'name' | 'email' | 'role' | 'password' | null
+}
 
 export default function AdminDashboard() {
+  const { user } = useAuth()
   const navigate = useNavigate()
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
   const [allUsers, setAllUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState<string | number | null>(null)
+  const [editDialog, setEditDialog] = useState<EditUserDialog>({ open: false, user: null, field: null })
+  const [editValue, setEditValue] = useState('')
+
+  // Redirect if not admin
+  useEffect(() => {
+    if (!user || user.role !== 'ADMIN') {
+      navigate('/chat')
+    }
+  }, [user, navigate])
 
   useEffect(() => {
-    if (!adminService.isLoggedIn()) {
-      navigate('/admin/login')
-      return
-    }
     fetchData()
-  }, [navigate])
+  }, [])
 
   const fetchData = async () => {
     try {
@@ -37,9 +59,8 @@ export default function AdminDashboard() {
       ])
       setPendingUsers(pending)
       setAllUsers(all)
-    } catch {
-      // Token expired or invalid
-      navigate('/admin/login')
+    } catch (err) {
+      console.error('Failed to fetch data:', err)
     } finally {
       setLoading(false)
     }
@@ -70,14 +91,53 @@ export default function AdminDashboard() {
     }
   }
 
-  const handleLogout = async () => {
-    await adminService.logout()
-    navigate('/admin/login')
+  const handleDeleteUser = async (userId: number, email: string) => {
+    if (!confirm(`Are you sure you want to delete user ${email}?`)) return
+    setActionLoading(userId)
+    try {
+      await adminService.deleteUser(userId.toString())
+      await fetchData()
+    } catch (err) {
+      console.error('Failed to delete user:', err)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const openEditDialog = (user: AdminUser, field: EditUserDialog['field']) => {
+    setEditDialog({ open: true, user, field })
+    if (field === 'name') setEditValue(user.name || '')
+    else if (field === 'email') setEditValue(user.email)
+    else if (field === 'role') setEditValue(user.role)
+    else setEditValue('')
+  }
+
+  const handleEditSave = async () => {
+    if (!editDialog.user || !editDialog.field) return
+
+    setActionLoading(editDialog.user.id)
+    try {
+      if (editDialog.field === 'name') {
+        await adminService.updateUserName(editDialog.user.id.toString(), editValue)
+      } else if (editDialog.field === 'email') {
+        await adminService.updateUserEmail(editDialog.user.id.toString(), editValue)
+      } else if (editDialog.field === 'role') {
+        await adminService.updateUserRole(editDialog.user.id.toString(), editValue as 'USER' | 'ADMIN')
+      } else if (editDialog.field === 'password') {
+        await adminService.resetUserPassword(editDialog.user.id.toString(), editValue)
+      }
+      await fetchData()
+      setEditDialog({ open: false, user: null, field: null })
+    } catch (err) {
+      console.error('Failed to update user:', err)
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="flex-1 flex items-center justify-center">
         <p className="text-muted-foreground">Loading...</p>
       </div>
     )
@@ -86,157 +146,277 @@ export default function AdminDashboard() {
   const approvedUsers = allUsers.filter((u) => u.approved)
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Shield className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-semibold">Admin Dashboard</h1>
-          </div>
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
-        </div>
-      </header>
-
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-6xl mx-auto p-6 space-y-4">
         {/* Pending Approvals */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-orange-500" />
-              <CardTitle>Pending Approvals</CardTitle>
+        <Card className="rounded-[28px] border-input">
+          <CardHeader className="pb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-orange-500/10 flex items-center justify-center">
+                <Clock className="h-5 w-5 text-orange-500" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-lg">Pending Approvals</CardTitle>
+                <p className="text-sm text-muted-foreground">Users waiting for approval</p>
+              </div>
               {pendingUsers.length > 0 && (
-                <span className="ml-2 inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-medium">
+                <div className="h-7 min-w-7 px-2 rounded-full bg-orange-500 text-white text-sm font-medium flex items-center justify-center">
                   {pendingUsers.length}
-                </span>
+                </div>
               )}
             </div>
-            <CardDescription>
-              Users waiting for your approval before they can access the application
-            </CardDescription>
           </CardHeader>
           <CardContent>
             {pendingUsers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <UserCheck className="h-10 w-10 mx-auto mb-3 opacity-40" />
-                <p>No pending users</p>
+              <div className="text-center py-12 text-muted-foreground">
+                <UserCheck className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                <p className="text-sm">No pending users</p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Registered</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendingUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">
-                        {user.name || '-'}
-                      </TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        {new Date(user.createdAt).toLocaleDateString('de-DE', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button
-                          size="sm"
-                          onClick={() => handleApprove(user.email)}
-                          disabled={actionLoading === user.email}
-                        >
-                          <UserCheck className="h-4 w-4 mr-1" />
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleReject(user.email)}
-                          disabled={actionLoading === user.email}
-                        >
-                          <UserX className="h-4 w-4 mr-1" />
-                          Reject
-                        </Button>
-                      </TableCell>
+              <div className="rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Registered</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingUsers.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell className="font-medium">
+                          {user.name || '-'}
+                        </TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          {new Date(user.createdAt).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </TableCell>
+                        <TableCell className="text-right space-x-2">
+                          <Button
+                            size="sm"
+                            className="rounded-full"
+                            onClick={() => handleApprove(user.email)}
+                            disabled={actionLoading === user.email}
+                          >
+                            <UserCheck className="h-4 w-4 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="rounded-full"
+                            onClick={() => handleReject(user.email)}
+                            disabled={actionLoading === user.email}
+                          >
+                            <UserX className="h-4 w-4 mr-1" />
+                            Reject
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
 
         {/* All Users */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" />
-              <CardTitle>Approved Users</CardTitle>
+        <Card className="rounded-[28px] border-input">
+          <CardHeader className="pb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Users className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-lg">All Users</CardTitle>
+                <p className="text-sm text-muted-foreground">{approvedUsers.length} approved users</p>
+              </div>
             </div>
-            <CardDescription>
-              All users with access to the application
-            </CardDescription>
           </CardHeader>
           <CardContent>
             {approvedUsers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
-                <p>No approved users yet</p>
+              <div className="text-center py-12 text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                <p className="text-sm">No approved users yet</p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Registered</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {approvedUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">
-                        {user.name || '-'}
-                      </TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                            user.role === 'ADMIN'
-                              ? 'bg-primary/10 text-primary'
-                              : 'bg-muted text-muted-foreground'
-                          }`}
-                        >
-                          {user.role}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(user.createdAt).toLocaleDateString('de-DE', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                        })}
-                      </TableCell>
+              <div className="rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Joined</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {approvedUsers.map((u) => (
+                      <TableRow key={u.id}>
+                        <TableCell className="font-medium">
+                          {u.name || '-'}
+                        </TableCell>
+                        <TableCell>{u.email}</TableCell>
+                        <TableCell>
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              u.role === 'ADMIN'
+                                ? 'bg-purple-500/10 text-purple-500'
+                                : 'bg-blue-500/10 text-blue-500'
+                            }`}
+                          >
+                            {u.role === 'ADMIN' && <Shield className="h-3 w-3 mr-1" />}
+                            {u.role}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(u.createdAt).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                disabled={actionLoading === u.id}
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditDialog(u, 'name')}>
+                                <UserIcon className="mr-2 h-4 w-4" />
+                                Change Name
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEditDialog(u, 'email')}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Change Email
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEditDialog(u, 'role')}>
+                                <Shield className="mr-2 h-4 w-4" />
+                                Change Role
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEditDialog(u, 'password')}>
+                                <Key className="mr-2 h-4 w-4" />
+                                Reset Password
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDeleteUser(u.id, u.email)}
+                                className="text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete User
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialog.open} onClose={() => setEditDialog({ open: false, user: null, field: null })}>
+        <DialogHeader>
+          <DialogTitle>
+            {editDialog.field === 'name' && 'Change Name'}
+            {editDialog.field === 'email' && 'Change Email'}
+            {editDialog.field === 'role' && 'Change Role'}
+            {editDialog.field === 'password' && 'Reset Password'}
+          </DialogTitle>
+          <DialogDescription>
+            Update {editDialog.field} for {editDialog.user?.email}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+          {editDialog.field === 'role' ? (
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEditValue('USER')}
+                  className={`flex-1 p-3 rounded-lg border-2 transition-all ${
+                    editValue === 'USER'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-input hover:border-primary/50'
+                  }`}
+                >
+                  <p className="font-medium">User</p>
+                  <p className="text-xs text-muted-foreground">Standard access</p>
+                </button>
+                <button
+                  onClick={() => setEditValue('ADMIN')}
+                  className={`flex-1 p-3 rounded-lg border-2 transition-all ${
+                    editValue === 'ADMIN'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-input hover:border-primary/50'
+                  }`}
+                >
+                  <p className="font-medium flex items-center gap-1 justify-center">
+                    <Shield className="h-4 w-4" />
+                    Admin
+                  </p>
+                  <p className="text-xs text-muted-foreground">Full access</p>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label>
+                {editDialog.field === 'name' && 'Name'}
+                {editDialog.field === 'email' && 'Email'}
+                {editDialog.field === 'password' && 'New Password'}
+              </Label>
+              <Input
+                type={editDialog.field === 'password' ? 'password' : editDialog.field === 'email' ? 'email' : 'text'}
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                placeholder={
+                  editDialog.field === 'password'
+                    ? 'Enter new password'
+                    : editDialog.field === 'email'
+                    ? 'email@example.com'
+                    : 'Enter name'
+                }
+                className="rounded-full"
+              />
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setEditDialog({ open: false, user: null, field: null })}
+            disabled={!!actionLoading}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleEditSave}
+            disabled={!!actionLoading || !editValue}
+          >
+            {actionLoading ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </div>
   )
 }

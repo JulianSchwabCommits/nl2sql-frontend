@@ -3,13 +3,17 @@ import { useAuth } from '@/hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Card, CardContent } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/authStore'
-import { User, Mail, Calendar, Trash2 } from 'lucide-react'
+import { useTheme } from '@/components/theme-provider'
+import { User, Mail, Calendar, Trash2, Sun, Moon, Monitor } from 'lucide-react'
 
 export default function Profile() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const { theme, setTheme } = useTheme()
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -29,76 +33,134 @@ export default function Profile() {
     }
   }
 
+  const themeOptions = [
+    { value: 'light', label: 'Light', icon: Sun },
+    { value: 'dark', label: 'Dark', icon: Moon },
+    { value: 'system', label: 'System', icon: Monitor },
+  ] as const
+
   return (
     <div className="flex-1 overflow-y-auto">
-      <header className="flex items-center gap-4 px-6 py-3 border-b">
-        <h1 className="text-sm font-medium">Account Settings</h1>
-      </header>
+      <div className="max-w-3xl mx-auto p-6 space-y-4">
+        {/* Personal Information */}
+        <Card className="rounded-[28px] border-input">
+          <CardContent className="p-6 space-y-4">
+            <div>
+              <Label className="text-base font-semibold">Personal Information</Label>
+              <p className="text-sm text-muted-foreground mt-1">Your account details</p>
+            </div>
 
-      <div className="max-w-2xl mx-auto p-6 space-y-6">
-        {/* Profile Info Section */}
-        <section className="rounded-lg border bg-card">
-          <div className="px-6 py-4 border-b">
-            <h2 className="font-medium">Personal Information</h2>
-            <p className="text-sm text-muted-foreground">Your account details</p>
-          </div>
-          <div className="divide-y">
-            <div className="flex items-center gap-4 px-6 py-4">
-              <User className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-muted-foreground">Name</p>
-                <p className="text-sm font-medium truncate">{user?.name || '--'}</p>
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-muted shrink-0">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Label className="text-xs text-muted-foreground">Name</Label>
+                  <p className="text-sm font-medium truncate">{user?.name || 'Not set'}</p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-4 px-6 py-4">
-              <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-muted-foreground">Email</p>
-                <p className="text-sm font-medium truncate">{user?.email || '--'}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 px-6 py-4">
-              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-muted-foreground">Member since</p>
-                <p className="text-sm font-medium">
-                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' }) : '--'}
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
 
-        {/* Session Section */}
-        <section className="rounded-lg border bg-card">
-          <div className="px-6 py-4 border-b">
-            <h2 className="font-medium">Session</h2>
-            <p className="text-sm text-muted-foreground">Manage your current session</p>
-          </div>
-          <div className="px-6 py-4">
-            <Button variant="outline" onClick={handleLogout} className="w-full sm:w-auto">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-muted shrink-0">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Label className="text-xs text-muted-foreground">Email</Label>
+                  <p className="text-sm font-medium truncate">{user?.email}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-muted shrink-0">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Label className="text-xs text-muted-foreground">Member since</Label>
+                  <p className="text-sm font-medium">
+                    {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '--'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Theme Settings */}
+        <Card className="rounded-[28px] border-input">
+          <CardContent className="p-6 space-y-4">
+            <div>
+              <Label className="text-base font-semibold">Theme</Label>
+              <p className="text-sm text-muted-foreground mt-1">Select your preferred theme</p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              {themeOptions.map((option) => {
+                const Icon = option.icon
+                const isActive = theme === option.value
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => setTheme(option.value)}
+                    className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${
+                      isActive
+                        ? 'border-primary bg-primary/5'
+                        : 'border-input hover:border-primary/50 hover:bg-accent/50'
+                    }`}
+                  >
+                    <Icon className={`h-5 w-5 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <span className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
+                      {option.label}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Session */}
+        <Card className="rounded-[28px] border-input">
+          <CardContent className="p-6 space-y-4">
+            <div>
+              <Label className="text-base font-semibold">Session</Label>
+              <p className="text-sm text-muted-foreground mt-1">Manage your current session</p>
+            </div>
+
+            <Button 
+              variant="outline" 
+              onClick={handleLogout} 
+              className="w-full rounded-full"
+            >
               Logout
             </Button>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
 
         {/* Danger Zone */}
-        <section className="rounded-lg border border-destructive/50 bg-card">
-          <div className="px-6 py-4 border-b border-destructive/50">
-            <h2 className="font-medium text-destructive">Danger Zone</h2>
-            <p className="text-sm text-muted-foreground">Irreversible actions</p>
-          </div>
-          <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <Card className="rounded-[28px] border-destructive/50 bg-destructive/5">
+          <CardContent className="p-6 space-y-4">
             <div>
-              <p className="text-sm font-medium">Delete account</p>
-              <p className="text-sm text-muted-foreground">Permanently remove your account and all data</p>
+              <Label className="text-base font-semibold text-destructive">Danger Zone</Label>
+              <p className="text-sm text-muted-foreground mt-1">Irreversible actions</p>
             </div>
-            <Button variant="destructive" onClick={() => setDeleteOpen(true)} className="shrink-0">
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Account
-            </Button>
-          </div>
-        </section>
+
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
+              <div>
+                <p className="text-sm font-medium">Delete account</p>
+                <p className="text-sm text-muted-foreground">Permanently remove your account and all data</p>
+              </div>
+              <Button 
+                variant="destructive" 
+                onClick={() => setDeleteOpen(true)} 
+                className="shrink-0 rounded-full"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Account
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>

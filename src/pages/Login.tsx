@@ -44,12 +44,12 @@ export default function Login() {
 
   return (
     <AuthLayout>
-      <Card>
-        <CardHeader>
-          <CardTitle>Login</CardTitle>
+      <Card className="rounded-[28px] border-input">
+        <CardHeader className="text-center pt-8 pb-6">
+          <CardTitle className="text-2xl">Welcome back</CardTitle>
           <CardDescription>Enter your credentials to continue</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-8 pb-8">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -59,7 +59,12 @@ export default function Login() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="you@example.com" {...field} />
+                      <Input
+                        type="email"
+                        placeholder="you@example.com"
+                        className="rounded-full"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -72,21 +77,30 @@ export default function Login() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
+                      <Input
+                        type="password"
+                        placeholder="••••••••"
+                        className="rounded-full"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+              {error && <p className="text-sm text-destructive text-center">{error}</p>}
+              <Button
+                type="submit"
+                className="w-full rounded-full mt-6"
+                disabled={form.formState.isSubmitting}
+              >
                 {form.formState.isSubmitting ? 'Logging in...' : 'Login'}
               </Button>
             </form>
           </Form>
-          <p className="mt-4 text-center text-sm text-muted-foreground">
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             Don't have an account?{' '}
-            <Link to="/register" className="underline text-primary">
+            <Link to="/register" className="font-medium text-primary hover:underline">
               Register
             </Link>
           </p>
