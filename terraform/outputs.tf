@@ -9,13 +9,13 @@ output "ecr_repository_name" {
 }
 
 output "ecs_cluster_name" {
-  description = "Frontend ECS cluster name"
-  value       = aws_ecs_cluster.main.name
+  description = "Shared ECS cluster name"
+  value       = data.aws_ecs_cluster.main.cluster_name
 }
 
 output "ecs_cluster_id" {
-  description = "Frontend ECS cluster ID"
-  value       = aws_ecs_cluster.main.id
+  description = "Shared ECS cluster ARN"
+  value       = data.aws_ecs_cluster.main.arn
 }
 
 output "ecs_service_name" {

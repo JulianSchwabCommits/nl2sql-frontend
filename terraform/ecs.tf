@@ -1,15 +1,6 @@
-# ECS Cluster
-resource "aws_ecs_cluster" "main" {
-  name = "${var.project_name}-${var.environment}-frontend-cluster"
-
-  setting {
-    name  = "containerInsights"
-    value = var.ecs_enable_container_insights ? "enabled" : "disabled"
-  }
-
-  tags = {
-    Name = "${var.project_name}-${var.environment}-frontend-ecs-cluster"
-  }
+# Shared ECS Cluster (managed by the backend Terraform stack)
+data "aws_ecs_cluster" "main" {
+  cluster_name = "${var.project_name}-${var.environment}-cluster"
 }
 
 # CloudWatch Log Group for ECS
@@ -152,7 +143,7 @@ resource "aws_ecs_task_definition" "frontend" {
 # ECS Service
 resource "aws_ecs_service" "frontend" {
   name            = "${var.project_name}-${var.environment}-frontend"
-  cluster         = aws_ecs_cluster.main.id
+  cluster         = data.aws_ecs_cluster.main.arn
   task_definition = aws_ecs_task_definition.frontend.arn
   desired_count   = var.ecs_desired_count
   launch_type     = "FARGATE"
