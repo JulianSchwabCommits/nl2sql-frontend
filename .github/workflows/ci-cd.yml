@@ -2,106 +2,44 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [develop]
-    paths:
-      - "src/**"
-      - "public/**"
-      - "package*.json"
-      - "vite.config.ts"
-      - "tsconfig.json"
-      - "tailwind.config.js"
-      - "Dockerfile"
-      - "nginx.conf"
-      - ".github/workflows/ci-cd.yml"
-  pull_request:
     branches: [develop, main]
   workflow_dispatch:
 
 permissions:
-  id-token: write
   contents: read
   packages: write
 
 jobs:
-  build:
-    name: Build & Lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run TypeScript type check
-        run: npx tsc --noEmit
-
-      - name: Build application
-        env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
-        run: npm run build
-
-      - name: Build completed
-        run: |
-          echo "Build completed successfully!"
-          echo "Next: Building and pushing Docker image..."
-  docker:
-    name: Build & Push Docker Image
+  push-ghcr:
+    name: Build & Push to GHCR
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: build
-    # Run on develop branch pushes and manual workflow_dispatch, not on PRs
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop'
-
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-      short-sha: ${{ steps.vars.outputs.short-sha }}
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up variables
+      - name: Set image tag
         id: vars
-        run: |
-          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          echo "short-sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
-          echo "tag=latest" >> $GITHUB_OUTPUT
+        run: echo "short_sha=$(echo '${{ github.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Login to GHCR
+        uses: docker/login-action@v3
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Extract metadata for Docker
+      - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY_NAME }}
+          images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=${{ steps.vars.outputs.tag }}
-            type=raw,value=${{ steps.vars.outputs.short-sha }}
+            type=raw,value=${{ steps.vars.outputs.short_sha }}
             type=raw,value=latest
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Build and push to ECR
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -115,100 +53,3 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
           sbom: false
-
-      # ── GHCR push ──
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: GHCR metadata
-        id: ghcr-meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=raw,value=${{ steps.vars.outputs.short-sha }}
-            type=raw,value=latest
-
-      - name: Build and push to GHCR
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.ghcr-meta.outputs.tags }}
-          labels: ${{ steps.ghcr-meta.outputs.labels }}
-          build-args: |
-            VITE_API_URL=${{ secrets.VITE_API_URL }}
-          cache-from: type=gha
-          provenance: false
-          sbom: false
-
-      - name: Image digest
-        run: |
-          echo "Image pushed successfully with tags:"
-          echo "${{ steps.meta.outputs.tags }}"
-          echo "Short SHA: ${{ steps.vars.outputs.short-sha }}"
-          echo "Next: Deploying to AWS ECS..."
-
-  deploy:
-    name: Deploy to AWS ECS
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [build, docker]
-    # Run on develop branch pushes and manual workflow_dispatch
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Determine image tag
-        id: image-tag
-        run: |
-          TAG=$(echo ${{ github.sha }} | cut -c1-7)
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "Deploying image tag: ${TAG}"
-
-      - name: Download task definition
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition ${{ secrets.ECS_TASK_DEFINITION_FAMILY }} \
-            --query taskDefinition > task-definition.json
-
-      - name: Fill in the new image ID in the Amazon ECS task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: frontend
-          image: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY_NAME }}:${{ steps.image-tag.outputs.tag }}
-
-      - name: Deploy Amazon ECS task definition
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ secrets.ECS_SERVICE_NAME }}
-          cluster: ${{ secrets.ECS_CLUSTER_NAME }}
-          wait-for-service-stability: true
-          wait-for-minutes: 10
-
-      - name: Verify deployment
-        run: |
-          echo "Deployment completed successfully!"
-          echo "Frontend URL: http://${{ secrets.FRONTEND_ALB_DNS_NAME }}"
-          echo ""
-          echo "You can now access the application at the URL above."
