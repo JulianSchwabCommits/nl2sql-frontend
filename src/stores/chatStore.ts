@@ -18,6 +18,13 @@ export interface ChatMessage {
   sql?: string
   results?: Record<string, unknown>[]
   queries?: QueryExecution[]
+  toolCalls?: ToolCallRecord[]
+}
+
+export interface ToolCallRecord {
+  tool: string
+  args?: Record<string, unknown>
+  result?: Record<string, unknown>
 }
 
 export interface Conversation {

@@ -2,15 +2,15 @@ import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@/hooks/useChat'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { ArrowUp, Loader2, AlertCircle, X, ChevronDown, ChevronRight, Database, Terminal, Square } from 'lucide-react'
-import type { QueryExecution } from '@/stores/chatStore'
+import { ArrowUp, Loader2, AlertCircle, X, ChevronDown, ChevronRight, Terminal, Square } from 'lucide-react'
+import type { QueryExecution, ToolCallRecord } from '@/stores/chatStore'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import TextareaAutosize from 'react-textarea-autosize'
 import { useAuthStore } from '@/stores/authStore'
 
 export default function Chat() {
-  const { messages, isLoading, sendMessage, cancelMessage, error, clearError } = useChat()
+  const { messages, isLoading, sendMessage, cancelMessage, error, clearError, toolCalls } = useChat()
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -91,9 +91,9 @@ export default function Chat() {
                   >
                     <CleanContent content={msg.content} />
                   </div>
-                  {/* Queries dropdown */}
-                  {msg.queries && msg.queries.length > 0 && (
-                    <QueriesDropdown queries={msg.queries} />
+                  {/* Tools & Queries dropdown */}
+                  {msg.toolCalls && msg.toolCalls.length > 0 && (
+                    <ToolsDropdown queries={msg.queries || []} toolCalls={msg.toolCalls} />
                   )}
                 </div>
               </div>
@@ -111,9 +111,15 @@ export default function Chat() {
                   <p className="text-xs font-medium text-muted-foreground mb-1">
                     NL2SQL
                   </p>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Querying database...
+                  <div className="space-y-1">
+                    {toolCalls.length > 0 ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>{toolCallLabel(toolCalls[toolCalls.length - 1].tool)}</span>
+                      </div>
+                    ) : (
+                      <ThinkingIndicator />
+                    )}
                   </div>
                 </div>
               </div>
@@ -174,6 +180,35 @@ export default function Chat() {
         </form>
       </div>
       )}
+    </div>
+  )
+}
+
+function toolCallLabel(tool: string): string {
+  switch (tool) {
+    case 'list_databases': return 'Listed available databases'
+    case 'get_database_schema': return 'Loaded database schema'
+    case 'read_query': return 'Querying database...'
+    case 'write_query': return 'Writing to database...'
+    case 'stop': return 'Finished'
+    default: return `Called ${tool}`
+  }
+}
+
+function ThinkingIndicator() {
+  const [dots, setDots] = useState(1)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots((d) => (d % 3) + 1)
+    }, 500)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      <span>Thinking{'.'.repeat(dots)}</span>
     </div>
   )
 }
@@ -293,21 +328,22 @@ function EmptyState({ onSuggestionClick, input, setInput, handleSubmit, isLoadin
   )
 }
 
-function QueriesDropdown({ queries }: { queries: QueryExecution[] }) {
+function ToolsDropdown({ queries, toolCalls }: { queries: QueryExecution[]; toolCalls: ToolCallRecord[] }) {
   const [open, setOpen] = useState(false)
-  const [expandedQuery, setExpandedQuery] = useState<number | null>(null)
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
+
+  const totalTools = toolCalls.length
 
   return (
     <div className="mt-3 rounded-lg border bg-card overflow-hidden">
-      {/* Toggle button */}
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 w-full px-4 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
       >
         {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        <Database className="h-3.5 w-3.5" />
+        <Terminal className="h-3.5 w-3.5" />
         <span>
-          {queries.length} {queries.length === 1 ? 'query' : 'queries'} executed
+          {totalTools} {totalTools === 1 ? 'tool' : 'tools'} called
         </span>
         {queries.some((q) => q.error) && (
           <span className="ml-auto text-[10px] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">
@@ -316,102 +352,154 @@ function QueriesDropdown({ queries }: { queries: QueryExecution[] }) {
         )}
       </button>
 
-      {/* Expanded query list */}
       {open && (
         <div className="border-t">
-          {queries.map((q, i) => (
-            <div key={i} className="border-b last:border-0">
-              {/* Query header */}
-              <button
-                onClick={() => setExpandedQuery(expandedQuery === i ? null : i)}
-                className="flex items-center gap-2 w-full px-4 py-2 text-xs hover:bg-muted/30 transition-colors"
-              >
-                {expandedQuery === i ? (
-                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                )}
-                <Terminal className="h-3 w-3 text-muted-foreground" />
-                <span
-                  className={`font-bold uppercase text-[10px] px-1.5 py-0.5 rounded ${
-                    q.error
-                      ? 'bg-destructive/10 text-destructive'
-                      : q.operation === 'SELECT'
-                        ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                        : q.operation === 'INSERT'
-                          ? 'bg-green-500/10 text-green-600 dark:text-green-400'
-                          : q.operation === 'UPDATE'
-                            ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
-                            : q.operation === 'DELETE'
-                              ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                              : 'bg-muted text-muted-foreground'
-                  }`}
+          {toolCalls.map((tc, i) => {
+            const isExpanded = expandedIndex === i
+            const hasResult = !!tc.result
+            return (
+              <div key={i} className="border-b last:border-0">
+                <button
+                  onClick={() => hasResult ? setExpandedIndex(isExpanded ? null : i) : undefined}
+                  className={`flex items-center gap-2 w-full px-4 py-2 text-xs ${hasResult ? 'hover:bg-muted/30 cursor-pointer' : ''} transition-colors`}
                 >
-                  {q.operation}
-                </span>
-                <span className="text-muted-foreground font-mono truncate flex-1 text-left">
-                  {q.sql.length > 60 ? q.sql.slice(0, 60) + '...' : q.sql}
-                </span>
-                {q.rowCount !== undefined && !q.error && (
-                  <span className="text-[10px] text-muted-foreground ml-auto shrink-0">
-                    {q.rowCount} row{q.rowCount !== 1 ? 's' : ''}
-                  </span>
+                  {hasResult ? (
+                    isExpanded ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                  ) : (
+                    <div className="w-3" />
+                  )}
+                  <ToolCallBadge tool={tc.tool} />
+                  <span className="text-muted-foreground flex-1 text-left">{toolCallLabel(tc.tool)}</span>
+                </button>
+
+                {isExpanded && tc.result && (
+                  <div className="px-4 pb-3">
+                    <ToolCallResult tool={tc.tool} args={tc.args} result={tc.result} />
+                  </div>
                 )}
-              </button>
-
-              {/* Expanded: full SQL + results table */}
-              {expandedQuery === i && (
-                <div className="px-4 pb-3 space-y-3">
-                  {/* Raw SQL */}
-                  <pre className="bg-muted/70 rounded-md p-3 overflow-x-auto text-xs font-mono text-foreground">
-                    <code>{q.sql}</code>
-                  </pre>
-
-                  {/* Error */}
-                  {q.error && (
-                    <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/5 rounded-md p-2">
-                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                      {q.error}
-                    </div>
-                  )}
-
-                  {/* Results table */}
-                  {q.results && q.results.length > 0 && (
-                    <div className="rounded-md border overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/50">
-                            {Object.keys(q.results[0]).map((col) => (
-                              <TableHead key={col} className="text-xs font-semibold whitespace-nowrap">
-                                {col}
-                              </TableHead>
-                            ))}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {q.results.map((row, ri) => (
-                            <TableRow key={ri}>
-                              {Object.values(row).map((val, ci) => (
-                                <TableCell key={ci} className="text-xs whitespace-nowrap max-w-[250px] truncate">
-                                  {val === null ? (
-                                    <span className="text-muted-foreground italic">null</span>
-                                  ) : (
-                                    String(val)
-                                  )}
-                                </TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
+  )
+}
+
+function ToolCallBadge({ tool }: { tool: string }) {
+  const config: Record<string, string> = {
+    list_databases: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+    get_database_schema: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    read_query: 'bg-green-500/10 text-green-600 dark:text-green-400',
+    write_query: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
+  }
+  const labels: Record<string, string> = {
+    list_databases: 'LIST',
+    get_database_schema: 'SCHEMA',
+    read_query: 'SELECT',
+    write_query: 'WRITE',
+  }
+  return (
+    <span className={`font-bold uppercase text-[10px] px-1.5 py-0.5 rounded ${config[tool] || 'bg-muted text-muted-foreground'}`}>
+      {labels[tool] || tool}
+    </span>
+  )
+}
+
+function ToolCallResult({ tool, args, result }: { tool: string; args?: Record<string, unknown>; result: Record<string, unknown> }) {
+  const sql = args?.sql as string | undefined
+
+  if (tool === 'list_databases' && result.databases) {
+    const dbs = result.databases as { id: string; name: string; host: string; database: string }[]
+    return (
+      <div className="rounded-md border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="text-xs font-semibold">Name</TableHead>
+              <TableHead className="text-xs font-semibold">Host</TableHead>
+              <TableHead className="text-xs font-semibold">Database</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {dbs.map((db) => (
+              <TableRow key={db.id}>
+                <TableCell className="text-xs">{db.name}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{db.host}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{db.database}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    )
+  }
+
+  if (tool === 'get_database_schema' && result.schema) {
+    return (
+      <pre className="bg-muted/70 rounded-md p-3 overflow-x-auto text-xs font-mono text-foreground max-h-[300px] overflow-y-auto">
+        <code>{result.schema as string}</code>
+      </pre>
+    )
+  }
+
+  if (tool === 'read_query') {
+    const rows = (result.rows || []) as Record<string, unknown>[]
+    return (
+      <div className="space-y-2">
+        {sql && (
+          <pre className="bg-muted/70 rounded-md p-3 overflow-x-auto text-xs font-mono text-foreground">
+            <code>{sql}</code>
+          </pre>
+        )}
+        {rows.length > 0 ? (
+          <div className="rounded-md border overflow-hidden max-h-[300px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  {Object.keys(rows[0]).map((col) => (
+                    <TableHead key={col} className="text-xs font-semibold whitespace-nowrap">{col}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row, ri) => (
+                  <TableRow key={ri}>
+                    {Object.values(row).map((val, ci) => (
+                      <TableCell key={ci} className="text-xs whitespace-nowrap max-w-[250px] truncate">
+                        {val === null ? <span className="text-muted-foreground italic">null</span> : String(val)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">No rows returned</p>
+        )}
+      </div>
+    )
+  }
+
+  if (tool === 'write_query') {
+    return (
+      <div className="space-y-2">
+        {sql && (
+          <pre className="bg-muted/70 rounded-md p-3 overflow-x-auto text-xs font-mono text-foreground">
+            <code>{sql}</code>
+          </pre>
+        )}
+        <p className="text-xs text-muted-foreground">
+          {result.success ? `${result.affectedRows} row${(result.affectedRows as number) !== 1 ? 's' : ''} affected` : `Error: ${result.error}`}
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <pre className="bg-muted/70 rounded-md p-3 overflow-x-auto text-xs font-mono text-foreground max-h-[200px] overflow-y-auto">
+      <code>{JSON.stringify(result, null, 2)}</code>
+    </pre>
   )
 }

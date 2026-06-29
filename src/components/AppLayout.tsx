@@ -25,6 +25,7 @@ import {
   Search,
   PanelLeftClose,
   Shield,
+  Database,
 } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 
@@ -163,14 +164,18 @@ export function AppLayout() {
                 <DropdownMenuContent side="right" align="end" className="w-56">
                   <DropdownMenuItem onSelect={() => navigate('/profile')}>
                     <Settings className="mr-2 h-4 w-4" />
-                    Profile Settings
+                    Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => navigate('/connections')}>
+                    <Database className="mr-2 h-4 w-4" />
+                    Database
                   </DropdownMenuItem>
                   {user?.role === 'ADMIN' && (
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onSelect={() => navigate('/admin')}>
                         <Shield className="mr-2 h-4 w-4" />
-                        Admin Panel
+                        Admin
                       </DropdownMenuItem>
                     </>
                   )}
@@ -337,14 +342,19 @@ export function AppLayout() {
                 <DropdownMenuContent side="top" align="start" className="w-56">
                   <DropdownMenuItem onSelect={() => navigate('/profile')}>
                     <Settings className="mr-2 h-4 w-4" />
-                    Profile Settings
+                    
+                    Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => navigate('/connections')}>
+                    <Database className="mr-2 h-4 w-4" />
+                    Database
                   </DropdownMenuItem>
                   {user?.role === 'ADMIN' && (
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onSelect={() => navigate('/admin')}>
                         <Shield className="mr-2 h-4 w-4" />
-                        Admin Panel
+                        Admin
                       </DropdownMenuItem>
                     </>
                   )}

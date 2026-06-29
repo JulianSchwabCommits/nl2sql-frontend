@@ -8,11 +8,21 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
+export interface ToolCallInfo {
+  tool: string
+  status: 'started' | 'completed'
+  args?: Record<string, unknown>
+  result?: Record<string, unknown>
+}
+
 export function useChat() {
   const socketRef = useRef<Socket | null>(null)
+  const toolCallsRef = useRef<{ tool: string; args?: Record<string, unknown>; result?: Record<string, unknown> }[]>([])
   const { accessToken, refreshAccessToken } = useAuthStore()
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected')
   const [error, setError] = useState<string | null>(null)
+  const [toolCalls, setToolCalls] = useState<ToolCallInfo[]>([])
+  const [isThinking, setIsThinking] = useState(false)
   const {
     conversations,
     activeConversationId,
@@ -62,10 +72,42 @@ export function useChat() {
           role: 'assistant',
           content: data.reply,
           queries: data.queries || [],
+          toolCalls: toolCallsRef.current.length > 0 ? [...toolCallsRef.current] : undefined,
         })
         setLoading(convId, false)
       }
+      setIsThinking(false)
+      setToolCalls([])
+      toolCallsRef.current = []
       setError(null)
+    })
+
+    socket.on('agent:thinking', () => {
+      setIsThinking(true)
+      setToolCalls([])
+    })
+
+    socket.on('agent:tool_call', (data: ToolCallInfo) => {
+      setIsThinking(false)
+      if (data.status === 'completed') {
+        toolCallsRef.current = toolCallsRef.current.map((tc) =>
+          tc.tool === data.tool && !tc.result
+            ? { ...tc, result: data.result }
+            : tc
+        )
+      } else {
+        toolCallsRef.current = [...toolCallsRef.current, { tool: data.tool, args: data.args as Record<string, unknown> | undefined }]
+      }
+      setToolCalls((prev) => {
+        if (data.status === 'completed') {
+          return prev.map((tc) =>
+            tc.tool === data.tool && tc.status === 'started'
+              ? { ...tc, status: 'completed' as const }
+              : tc
+          )
+        }
+        return [...prev, data]
+      })
     })
 
     socket.on('agent:error', (data: { message: string; conversationId?: string }) => {
@@ -75,6 +117,9 @@ export function useChat() {
         addMessageToConversation(convId, { role: 'assistant', content: `Error: ${errorMsg}` })
         setLoading(convId, false)
       }
+      setIsThinking(false)
+      setToolCalls([])
+      toolCallsRef.current = []
       setError(errorMsg)
     })
 
@@ -83,6 +128,9 @@ export function useChat() {
       if (convId) {
         setLoading(convId, false)
       }
+      setIsThinking(false)
+      setToolCalls([])
+      toolCallsRef.current = []
     })
 
     socket.on('connect_error', (err) => {
@@ -237,5 +285,7 @@ export function useChat() {
     connectionStatus,
     error,
     clearError,
+    isThinking,
+    toolCalls,
   }
 }
