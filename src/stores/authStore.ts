@@ -9,10 +9,12 @@ interface AuthState {
   accessToken: string | null
   user: User | null
   isAuthenticated: boolean
+  isInitializing: boolean
   setAccessToken: (token: string | null) => void
   setUser: (user: User | null) => void
   logout: () => void
   refreshAccessToken: () => Promise<string | null>
+  initAuth: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -21,6 +23,7 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       user: null,
       isAuthenticated: false,
+      isInitializing: true,
       setAccessToken: (token) => set({ accessToken: token, isAuthenticated: !!token }),
       setUser: (user) => set({ user }),
       logout: () => set({ accessToken: null, user: null, isAuthenticated: false }),
@@ -38,14 +41,24 @@ export const useAuthStore = create<AuthState>()(
           }
           return null
         } catch {
-          // Refresh failed — force logout
           get().logout()
           return null
         }
       },
+      initAuth: async () => {
+        const { user } = get()
+        // If we have a persisted user, try to restore the session via refresh token
+        if (user) {
+          await get().refreshAccessToken()
+        }
+        set({ isInitializing: false })
+      },
     }),
     {
       name: 'auth-storage',
+      partialize: (state) => ({
+        user: state.user,
+      }),
     }
   )
 )

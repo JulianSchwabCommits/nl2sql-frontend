@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
@@ -8,8 +9,15 @@ import AdminDashboard from '@/pages/AdminDashboard'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AppLayout } from '@/components/AppLayout'
 import { ThemeProvider } from '@/components/theme-provider'
+import { useAuthStore } from '@/stores/authStore'
 
 export default function App() {
+  const initAuth = useAuthStore((s) => s.initAuth)
+
+  useEffect(() => {
+    initAuth()
+  }, [initAuth])
+
   return (
     <ThemeProvider defaultTheme="dark" storageKey="nl2sql-theme">
       <BrowserRouter>
