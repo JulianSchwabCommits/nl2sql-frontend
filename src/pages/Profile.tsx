@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -6,9 +6,10 @@ import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } fr
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { authApi } from '@/api/auth'
+import { llmSettingsApi, type LlmSettings } from '@/api/llm-settings'
 import { useAuthStore } from '@/stores/authStore'
 import { useTheme } from '@/components/theme-provider'
-import { User, Mail, Calendar, Trash2, Sun, Moon, Monitor } from 'lucide-react'
+import { User, Mail, Calendar, Trash2, Sun, Moon, Monitor, Key, Bot, Loader2, Check } from 'lucide-react'
 
 export default function Profile() {
   const { user, logout } = useAuth()
@@ -16,6 +17,81 @@ export default function Profile() {
   const { theme, setTheme } = useTheme()
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  // LLM Settings state
+  const [llmSettings, setLlmSettings] = useState<LlmSettings | null>(null)
+  const [llmLoading, setLlmLoading] = useState(true)
+  const [llmSaving, setLlmSaving] = useState(false)
+  const [llmSaved, setLlmSaved] = useState(false)
+  const [llmError, setLlmError] = useState<string | null>(null)
+  const [llmProvider, setLlmProvider] = useState('openai')
+  const [llmModel, setLlmModel] = useState('gpt-4o-mini')
+  const [llmApiKey, setLlmApiKey] = useState('')
+
+  const modelOptions = [
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Recommended)' },
+    { value: 'gpt-4o', label: 'GPT-4o' },
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+  ]
+
+  useEffect(() => {
+    loadLlmSettings()
+  }, [])
+
+  const loadLlmSettings = async () => {
+    try {
+      const { data } = await llmSettingsApi.get()
+      if (data) {
+        setLlmSettings(data)
+        setLlmProvider(data.provider)
+        setLlmModel(data.model)
+      }
+    } catch {
+      // No settings yet, that's fine
+    } finally {
+      setLlmLoading(false)
+    }
+  }
+
+  const handleLlmSave = async () => {
+    if (!llmApiKey && !llmSettings?.hasApiKey) {
+      setLlmError('API key is required')
+      return
+    }
+
+    setLlmSaving(true)
+    setLlmError(null)
+    try {
+      const dto = {
+        provider: llmProvider,
+        model: llmModel,
+        apiKey: llmApiKey,
+      }
+      const { data } = await llmSettingsApi.upsert(dto)
+      setLlmSettings(data)
+      setLlmApiKey('')
+      setLlmSaved(true)
+      setTimeout(() => setLlmSaved(false), 2000)
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } }
+      setLlmError(error.response?.data?.message || 'Failed to save settings')
+    } finally {
+      setLlmSaving(false)
+    }
+  }
+
+  const handleLlmDelete = async () => {
+    try {
+      await llmSettingsApi.delete()
+      setLlmSettings(null)
+      setLlmProvider('openai')
+      setLlmModel('gpt-4o-mini')
+      setLlmApiKey('')
+    } catch {
+      setLlmError('Failed to delete settings')
+    }
+  }
 
   const handleLogout = async () => {
     await logout()
@@ -116,6 +192,111 @@ export default function Profile() {
                 )
               })}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* LLM Settings */}
+        <Card className="rounded-[28px] border-input">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-base font-semibold">LLM Settings</Label>
+                <p className="text-sm text-muted-foreground mt-1">Configure your AI provider and API key</p>
+              </div>
+              {llmSettings?.hasApiKey && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                  <Check className="h-3 w-3" />
+                  Configured
+                </span>
+              )}
+            </div>
+
+            {llmLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-4 pt-2">
+                {/* Provider */}
+                <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Bot className="h-4 w-4" />
+                    Provider
+                  </Label>
+                  <select
+                    value={llmProvider}
+                    onChange={(e) => setLlmProvider(e.target.value)}
+                    className="w-full h-10 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  >
+                    <option value="openai">OpenAI</option>
+                  </select>
+                </div>
+
+                {/* Model */}
+                <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Bot className="h-4 w-4" />
+                    Model
+                  </Label>
+                  <select
+                    value={llmModel}
+                    onChange={(e) => setLlmModel(e.target.value)}
+                    className="w-full h-10 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  >
+                    {modelOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* API Key */}
+                <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Key className="h-4 w-4" />
+                    API Key
+                  </Label>
+                  <input
+                    type="password"
+                    value={llmApiKey}
+                    onChange={(e) => { setLlmApiKey(e.target.value); setLlmError(null) }}
+                    placeholder={llmSettings?.hasApiKey ? '••••••••••••••••••••' : 'sk-...'}
+                    className="w-full h-10 px-3 rounded-xl border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                  {llmSettings?.hasApiKey && (
+                    <p className="text-xs text-muted-foreground">Leave blank to keep your existing key. Enter a new value to replace it.</p>
+                  )}
+                </div>
+
+                {llmError && (
+                  <p className="text-sm text-destructive">{llmError}</p>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    onClick={handleLlmSave}
+                    disabled={llmSaving}
+                    className="flex-1 rounded-full"
+                  >
+                    {llmSaving ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                    ) : llmSaved ? (
+                      <><Check className="h-4 w-4 mr-2" /> Saved!</>
+                    ) : (
+                      'Save Settings'
+                    )}
+                  </Button>
+                  {llmSettings && (
+                    <Button
+                      variant="outline"
+                      onClick={handleLlmDelete}
+                      className="rounded-full"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
