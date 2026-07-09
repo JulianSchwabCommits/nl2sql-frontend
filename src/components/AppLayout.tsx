@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { useChatApi } from '@/hooks/useChatApi'
 import { useChatStore } from '@/stores/chatStore'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -26,21 +27,30 @@ import {
   PanelLeftClose,
   Shield,
   Database,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
+import { generateUUID } from '@/lib/utils'
 
 export function AppLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const {
-    conversations,
+    conversationsMeta,
+    hasMore,
+    isLoadingList,
+    isLoadingMore,
+    listError,
     activeConversationId,
+    fetchConversations,
+    fetchMoreConversations,
+    fetchConversation,
     createConversation,
     deleteConversation,
     renameConversation,
-    setActiveConversation,
-  } = useChatStore()
+  } = useChatApi()
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
@@ -48,20 +58,40 @@ export function AppLayout() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
+  const chatListRef = useRef<HTMLDivElement>(null)
+
+  // Fetch conversations on mount
+  useEffect(() => {
+    fetchConversations()
+  }, [fetchConversations])
+
+  // Infinite scroll handler
+  const handleScroll = useCallback(() => {
+    const el = chatListRef.current
+    if (!el || !hasMore || isLoadingMore) return
+
+    const { scrollTop, scrollHeight, clientHeight } = el
+    if (scrollHeight - scrollTop - clientHeight < 100) {
+      fetchMoreConversations()
+    }
+  }, [hasMore, isLoadingMore, fetchMoreConversations])
+
   const handleLogout = async () => {
+    useChatStore.getState().reset()
     await logout()
     navigate('/login')
   }
 
-  const handleNewChat = () => {
-    createConversation()
+  const handleNewChat = async () => {
+    const id = generateUUID()
+    await createConversation(id, 'New Chat')
     if (location.pathname !== '/chat') {
       navigate('/chat')
     }
   }
 
-  const handleSelectChat = (id: string) => {
-    setActiveConversation(id)
+  const handleSelectChat = async (id: string) => {
+    await fetchConversation(id)
     if (location.pathname !== '/chat') {
       navigate('/chat')
     }
@@ -231,91 +261,122 @@ export function AppLayout() {
             </div>
 
             {/* Chat list */}
-            <div className="flex-1 overflow-y-auto px-2 space-y-1">
-              {conversations.length === 0 ? (
+            <div
+              ref={chatListRef}
+              onScroll={handleScroll}
+              className="flex-1 overflow-y-auto px-2 space-y-1"
+            >
+              {isLoadingList ? (
+                <div className="px-3 py-12 text-center">
+                  <Loader2 className="h-6 w-6 mx-auto animate-spin text-muted-foreground mb-3" />
+                  <p className="text-sm text-muted-foreground">Loading chats...</p>
+                </div>
+              ) : listError ? (
+                <div className="px-3 py-12 text-center">
+                  <AlertCircle className="h-10 w-10 mx-auto text-destructive/50 mb-3" />
+                  <p className="text-sm text-destructive">{listError}</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2"
+                    onClick={fetchConversations}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : conversationsMeta.length === 0 ? (
                 <div className="px-3 py-12 text-center">
                   <MessageSquare className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
                   <p className="text-sm text-muted-foreground">No chats yet</p>
                 </div>
               ) : (
-                conversations.map((conv) => {
-                  const isActive =
-                    conv.id === activeConversationId &&
-                    location.pathname === '/chat'
-                  const isEditing = editingId === conv.id
+                <>
+                  {conversationsMeta.map((conv) => {
+                    const isActive =
+                      conv.id === activeConversationId &&
+                      location.pathname === '/chat'
+                    const isEditing = editingId === conv.id
 
-                  return (
-                    <div
-                      key={conv.id}
-                      className={`group/item flex items-center gap-1 rounded-lg transition-colors ${
-                        isActive ? 'bg-accent' : 'hover:bg-accent/50'
-                      }`}
-                    >
-                      {isEditing ? (
-                        <div className="flex items-center gap-1.5 flex-1 min-w-0 px-3 py-2.5">
-                          <Input
-                            value={editTitle}
-                            onChange={(e) => setEditTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleConfirmRename()
-                              if (e.key === 'Escape') handleCancelRename()
-                            }}
-                            className="h-7 text-sm px-2"
-                            autoFocus
-                          />
-                          <button
-                            onClick={handleConfirmRename}
-                            className="shrink-0 p-1 hover:bg-accent rounded"
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={handleCancelRename}
-                            className="shrink-0 p-1 hover:bg-accent rounded"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleSelectChat(conv.id)}
-                            className="flex items-center gap-3 flex-1 min-w-0 px-3 py-2.5 text-left"
-                          >
-                            <span className="text-sm truncate">
-                              {conv.title}
-                            </span>
-                          </button>
+                    return (
+                      <div
+                        key={conv.id}
+                        className={`group/item flex items-center gap-1 rounded-lg transition-colors ${
+                          isActive ? 'bg-accent' : 'hover:bg-accent/50'
+                        }`}
+                      >
+                        {isEditing ? (
+                          <div className="flex items-center gap-1.5 flex-1 min-w-0 px-3 py-2.5">
+                            <Input
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleConfirmRename()
+                                if (e.key === 'Escape') handleCancelRename()
+                              }}
+                              className="h-7 text-sm px-2"
+                              autoFocus
+                            />
+                            <button
+                              onClick={handleConfirmRename}
+                              className="shrink-0 p-1 hover:bg-accent rounded"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={handleCancelRename}
+                              className="shrink-0 p-1 hover:bg-accent rounded"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleSelectChat(conv.id)}
+                              className="flex items-center gap-3 flex-1 min-w-0 px-3 py-2.5 text-left"
+                            >
+                              <span className="text-sm truncate">
+                                {conv.title}
+                              </span>
+                            </button>
 
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="shrink-0 p-1.5 rounded-md opacity-0 group-hover/item:opacity-100 hover:bg-accent transition-opacity outline-none mr-2">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent side="right" align="start">
-                              <DropdownMenuItem
-                                onSelect={() =>
-                                  handleStartRename(conv.id, conv.title)
-                                }
-                              >
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Rename
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onSelect={() => deleteConversation(conv.id)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </>
-                      )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="shrink-0 p-1.5 rounded-md opacity-0 group-hover/item:opacity-100 hover:bg-accent transition-opacity outline-none mr-2">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent side="right" align="start">
+                                <DropdownMenuItem
+                                  onSelect={() =>
+                                    handleStartRename(conv.id, conv.title)
+                                  }
+                                >
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  Rename
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onSelect={() => deleteConversation(conv.id)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {/* Load more indicator */}
+                  {isLoadingMore && (
+                    <div className="py-3 text-center">
+                      <Loader2 className="h-4 w-4 mx-auto animate-spin text-muted-foreground" />
                     </div>
-                  )
-                })
+                  )}
+                </>
               )}
             </div>
 
@@ -342,7 +403,6 @@ export function AppLayout() {
                 <DropdownMenuContent side="top" align="start" className="w-56">
                   <DropdownMenuItem onSelect={() => navigate('/profile')}>
                     <Settings className="mr-2 h-4 w-4" />
-                    
                     Profile
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => navigate('/connections')}>
@@ -412,13 +472,13 @@ export function AppLayout() {
             </button>
 
             {/* Chat List */}
-            {conversations.length === 0 ? (
+            {conversationsMeta.length === 0 ? (
               <div className="px-4 py-12 text-center">
                 <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
                 <p className="text-sm text-muted-foreground">No chats yet</p>
               </div>
             ) : (
-              conversations
+              conversationsMeta
                 .filter((conv) => {
                   if (!searchQuery) return true
                   return conv.title.toLowerCase().includes(searchQuery.toLowerCase())

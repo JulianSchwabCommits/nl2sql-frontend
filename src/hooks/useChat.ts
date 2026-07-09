@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
-import axios from 'axios'
 import { useAuthStore } from '@/stores/authStore'
-import { useChatStore } from '@/stores/chatStore'
+import { useChatStore, ChatMessage } from '@/stores/chatStore'
+import { useChatApi } from '@/hooks/useChatApi'
+import { generateUUID } from '@/lib/utils'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -23,21 +24,20 @@ export function useChat() {
   const [error, setError] = useState<string | null>(null)
   const [toolCalls, setToolCalls] = useState<ToolCallInfo[]>([])
   const [isThinking, setIsThinking] = useState(false)
+
   const {
-    conversations,
     activeConversationId,
+    loadedConversations,
     loadingConversations,
-    addMessageToConversation,
     setLoading,
-    createConversation,
-    deleteConversation,
-    renameConversation,
-    setActiveConversation,
+    addMessageToConversation,
   } = useChatStore()
 
-  const activeConversation = conversations.find(
-    (c) => c.id === activeConversationId
-  )
+  const { createConversation, fetchConversation } = useChatApi()
+
+  const activeConversation = activeConversationId
+    ? loadedConversations[activeConversationId]
+    : null
 
   const isLoading = activeConversationId
     ? loadingConversations.has(activeConversationId)
@@ -65,15 +65,18 @@ export function useChat() {
       setError(null)
     })
 
-    socket.on('agent:response', (data: { reply: string; queries?: any[]; conversationId?: string }) => {
+    socket.on('agent:response', (data: { reply: string; queries?: Array<Record<string, unknown>>; conversationId?: string }) => {
       const convId = data.conversationId || useChatStore.getState().activeConversationId
       if (convId) {
-        addMessageToConversation(convId, {
+        const message: ChatMessage = {
+          id: generateUUID(),
           role: 'assistant',
           content: data.reply,
-          queries: data.queries || [],
+          timestamp: new Date().toISOString(),
+          queries: data.queries as ChatMessage['queries'],
           toolCalls: toolCallsRef.current.length > 0 ? [...toolCallsRef.current] : undefined,
-        })
+        }
+        addMessageToConversation(convId, message)
         setLoading(convId, false)
       }
       setIsThinking(false)
@@ -96,7 +99,7 @@ export function useChat() {
             : tc
         )
       } else {
-        toolCallsRef.current = [...toolCallsRef.current, { tool: data.tool, args: data.args as Record<string, unknown> | undefined }]
+        toolCallsRef.current = [...toolCallsRef.current, { tool: data.tool, args: data.args }]
       }
       setToolCalls((prev) => {
         if (data.status === 'completed') {
@@ -114,7 +117,13 @@ export function useChat() {
       const errorMsg = data.message || 'An unknown error occurred'
       const convId = data.conversationId || useChatStore.getState().activeConversationId
       if (convId) {
-        addMessageToConversation(convId, { role: 'assistant', content: `Error: ${errorMsg}` })
+        const message: ChatMessage = {
+          id: generateUUID(),
+          role: 'assistant',
+          content: `Error: ${errorMsg}`,
+          timestamp: new Date().toISOString(),
+        }
+        addMessageToConversation(convId, message)
         setLoading(convId, false)
       }
       setIsThinking(false)
@@ -169,63 +178,35 @@ export function useChat() {
     }
   }, [accessToken])
 
-  const sendViaHttp = useCallback(
-    async (prompt: string, conversationId: string) => {
-      try {
-        const currentConv = useChatStore.getState().conversations.find(
-          (c) => c.id === conversationId
-        )
-        const history = (currentConv?.messages ?? [])
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .slice(-20)
-          .map((m) => ({
-            role: m.role === 'user' ? 'user' : 'model',
-            content: m.content,
-          }))
-
-        const response = await axios.post<{ reply: string; queries?: any[] }>(
-          `${API_URL}/agent/chat`,
-          { prompt, history },
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-            timeout: 30000,
-          }
-        )
-        addMessageToConversation(conversationId, {
-          role: 'assistant',
-          content: response.data.reply,
-          queries: response.data.queries || [],
-        })
-        setError(null)
-      } catch (err: any) {
-        const errorMsg =
-          err.response?.data?.message ||
-          err.message ||
-          'Failed to get response'
-        addMessageToConversation(conversationId, { role: 'assistant', content: `Error: ${errorMsg}` })
-        setError(errorMsg)
-      } finally {
-        setLoading(conversationId, false)
-      }
-    },
-    [accessToken, addMessageToConversation, setLoading]
-  )
-
   const sendMessage = useCallback(
-    (prompt: string) => {
+    async (prompt: string) => {
       if (!prompt.trim()) return
 
-      // Auto-create conversation if none active
+      // Create conversation via backend if none active
       let convId = activeConversationId
       if (!convId) {
-        convId = createConversation()
+        const newId = generateUUID()
+        await createConversation(newId, 'New Chat')
+        convId = newId
       }
 
-      addMessageToConversation(convId, { role: 'user', content: prompt })
+      // Ensure conversation is loaded
+      if (!useChatStore.getState().loadedConversations[convId]) {
+        await fetchConversation(convId)
+      }
+
+      // Add user message optimistically to the loaded conversation
+      const userMessage: ChatMessage = {
+        id: generateUUID(),
+        role: 'user',
+        content: prompt,
+        timestamp: new Date().toISOString(),
+      }
+      addMessageToConversation(convId, userMessage)
       setLoading(convId, true)
       setError(null)
 
-      // Try WebSocket first, fall back to HTTP
+      // Send via WebSocket
       if (socketRef.current?.connected) {
         socketRef.current.emit('agent:chat', { prompt, conversationId: convId })
 
@@ -233,16 +214,18 @@ export function useChat() {
         const targetConvId = convId
         const timeout = setTimeout(() => {
           if (useChatStore.getState().loadingConversations.has(targetConvId)) {
-            addMessageToConversation(targetConvId, {
+            const timeoutMessage: ChatMessage = {
+              id: generateUUID(),
               role: 'assistant',
               content: 'Error: Request timed out. The server took too long to respond.',
-            })
+              timestamp: new Date().toISOString(),
+            }
+            addMessageToConversation(targetConvId, timeoutMessage)
             setLoading(targetConvId, false)
             setError('Request timed out')
           }
         }, 60000)
 
-        // Clear timeout when this conversation stops loading
         const unsub = useChatStore.subscribe((state) => {
           if (!state.loadingConversations.has(targetConvId)) {
             clearTimeout(timeout)
@@ -250,10 +233,19 @@ export function useChat() {
           }
         })
       } else {
-        sendViaHttp(prompt, convId)
+        // No connection - show error
+        const errMessage: ChatMessage = {
+          id: generateUUID(),
+          role: 'assistant',
+          content: 'Error: Not connected to the server. Please wait for reconnection.',
+          timestamp: new Date().toISOString(),
+        }
+        addMessageToConversation(convId, errMessage)
+        setLoading(convId, false)
+        setError('Not connected')
       }
     },
-    [activeConversationId, addMessageToConversation, setLoading, createConversation, sendViaHttp]
+    [activeConversationId, addMessageToConversation, setLoading, createConversation, fetchConversation]
   )
 
   const clearError = useCallback(() => setError(null), [])
@@ -262,12 +254,10 @@ export function useChat() {
     if (!activeConversationId) return
     if (!loadingConversations.has(activeConversationId)) return
 
-    // Emit cancel event to backend
     if (socketRef.current?.connected) {
       socketRef.current.emit('agent:cancel')
     }
 
-    // Immediately stop loading on the client side
     setLoading(activeConversationId, false)
   }, [activeConversationId, loadingConversations, setLoading])
 
@@ -276,12 +266,7 @@ export function useChat() {
     isLoading,
     sendMessage,
     cancelMessage,
-    conversations,
     activeConversationId,
-    createConversation,
-    deleteConversation,
-    renameConversation,
-    setActiveConversation,
     connectionStatus,
     error,
     clearError,

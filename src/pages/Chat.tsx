@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@/hooks/useChat'
+import { useChatStore } from '@/stores/chatStore'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { ArrowUp, Loader2, AlertCircle, X, ChevronDown, ChevronRight, Terminal, Square } from 'lucide-react'
@@ -11,6 +12,7 @@ import { useAuthStore } from '@/stores/authStore'
 
 export default function Chat() {
   const { messages, isLoading, sendMessage, cancelMessage, error, clearError, toolCalls } = useChat()
+  const isLoadingConversation = useChatStore((s) => s.isLoadingConversation)
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -45,7 +47,11 @@ export default function Chat() {
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto">
-        {messages.length === 0 ? (
+        {isLoadingConversation ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : messages.length === 0 ? (
           <EmptyState
             onSuggestionClick={handleSuggestion}
             input={input}
