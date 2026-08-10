@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { connectionsApi, type DatabaseConnection, type CreateConnectionDto } from '@/api/connections'
+import { connectionsApi, type DatabaseConnection, type CreateConnectionDto, type UpdateConnectionDto } from '@/api/connections'
 import {
   Database,
   Plus,
@@ -14,6 +14,9 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  ChevronDown,
+  ChevronRight,
+  Shield,
 } from 'lucide-react'
 
 export default function Connections() {
@@ -25,6 +28,7 @@ export default function Connections() {
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<{ id: string; success: boolean; error?: string } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [sshExpanded, setSshExpanded] = useState(false)
 
   const [form, setForm] = useState<CreateConnectionDto>({
     name: '',
@@ -34,6 +38,13 @@ export default function Connections() {
     username: '',
     password: '',
     ssl: false,
+    sshEnabled: false,
+    sshHost: '',
+    sshPort: 22,
+    sshUsername: '',
+    sshAuthMethod: 'password' as const,
+    sshPassword: '',
+    sshPrivateKey: '',
   })
 
   useEffect(() => {
@@ -51,7 +62,23 @@ export default function Connections() {
 
   const handleOpenCreate = () => {
     setEditingId(null)
-    setForm({ name: '', host: '', port: 5432, database: '', username: '', password: '', ssl: false })
+    setForm({
+      name: '',
+      host: '',
+      port: 5432,
+      database: '',
+      username: '',
+      password: '',
+      ssl: false,
+      sshEnabled: false,
+      sshHost: '',
+      sshPort: 22,
+      sshUsername: '',
+      sshAuthMethod: 'password' as const,
+      sshPassword: '',
+      sshPrivateKey: '',
+    })
+    setSshExpanded(false)
     setFormOpen(true)
   }
 
@@ -65,7 +92,15 @@ export default function Connections() {
       username: conn.username,
       password: '',
       ssl: conn.ssl,
+      sshEnabled: conn.sshEnabled || false,
+      sshHost: conn.sshHost || '',
+      sshPort: conn.sshPort || 22,
+      sshUsername: conn.sshUsername || '',
+      sshAuthMethod: conn.sshAuthMethod || 'password',
+      sshPassword: '',
+      sshPrivateKey: '',
     })
+    setSshExpanded(conn.sshEnabled || false)
     setFormOpen(true)
   }
 
@@ -73,7 +108,7 @@ export default function Connections() {
     setSaving(true)
     try {
       if (editingId) {
-        const dto: Record<string, unknown> = {}
+        const dto: UpdateConnectionDto = {}
         if (form.name) dto.name = form.name
         if (form.host) dto.host = form.host
         if (form.port) dto.port = form.port
@@ -81,6 +116,15 @@ export default function Connections() {
         if (form.username) dto.username = form.username
         if (form.password) dto.password = form.password
         dto.ssl = form.ssl
+        if (form.sshEnabled !== undefined) dto.sshEnabled = form.sshEnabled
+        if (form.sshEnabled) {
+          dto.sshHost = form.sshHost
+          dto.sshPort = form.sshPort
+          dto.sshUsername = form.sshUsername
+          dto.sshAuthMethod = form.sshAuthMethod
+          if (form.sshPassword) dto.sshPassword = form.sshPassword
+          if (form.sshPrivateKey) dto.sshPrivateKey = form.sshPrivateKey
+        }
         await connectionsApi.update(editingId, dto)
       } else {
         await connectionsApi.create(form)
@@ -176,6 +220,11 @@ export default function Connections() {
                       <p className="text-xs text-muted-foreground">
                         User: {conn.username} {conn.ssl && '(SSL)'}
                       </p>
+                      {conn.sshEnabled && (
+                        <p className="text-xs text-muted-foreground">
+                          SSH: {conn.sshUsername}@{conn.sshHost}:{conn.sshPort}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -294,6 +343,102 @@ export default function Connections() {
                 className="rounded border-input"
               />
               <Label htmlFor="ssl">Use SSL</Label>
+            </div>
+
+            {/* SSH Tunnel Section */}
+            <div className="border border-input rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  const newEnabled = !form.sshEnabled
+                  setForm({ ...form, sshEnabled: newEnabled })
+                  setSshExpanded(newEnabled)
+                }}
+                className="flex items-center gap-2 w-full px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 transition-colors"
+              >
+                {form.sshEnabled ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+                <Shield className="h-4 w-4 text-muted-foreground" />
+                <span>Connect via SSH Tunnel</span>
+                {form.sshEnabled && (
+                  <span className="ml-auto text-xs text-green-500 font-normal">Enabled</span>
+                )}
+              </button>
+
+              {form.sshEnabled && sshExpanded && (
+                <div className="px-4 pb-4 pt-2 space-y-3 bg-muted/10 border-t border-input">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <Label>SSH Host</Label>
+                      <Input
+                        value={form.sshHost}
+                        onChange={(e) => setForm({ ...form, sshHost: e.target.value })}
+                        placeholder="bastion.example.com"
+                      />
+                    </div>
+                    <div>
+                      <Label>SSH Port</Label>
+                      <Input
+                        type="number"
+                        value={form.sshPort}
+                        onChange={(e) => setForm({ ...form, sshPort: parseInt(e.target.value) || 22 })}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>SSH Username</Label>
+                    <Input
+                      value={form.sshUsername}
+                      onChange={(e) => setForm({ ...form, sshUsername: e.target.value })}
+                      placeholder="ubuntu"
+                    />
+                  </div>
+                  <div>
+                    <Label>Authentication Method</Label>
+                    <select
+                      value={form.sshAuthMethod}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          sshAuthMethod: e.target.value as 'password' | 'privateKey',
+                          sshPassword: '',
+                          sshPrivateKey: '',
+                        })
+                      }
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="password">Password</option>
+                      <option value="privateKey">Private Key</option>
+                    </select>
+                  </div>
+                  {form.sshAuthMethod === 'password' && (
+                    <div>
+                      <Label>SSH Password</Label>
+                      <Input
+                        type="password"
+                        value={form.sshPassword}
+                        onChange={(e) => setForm({ ...form, sshPassword: e.target.value })}
+                        placeholder={editingId ? '(unchanged)' : ''}
+                      />
+                    </div>
+                  )}
+                  {form.sshAuthMethod === 'privateKey' && (
+                    <div>
+                      <Label>SSH Private Key</Label>
+                      <textarea
+                        value={form.sshPrivateKey}
+                        onChange={(e) => setForm({ ...form, sshPrivateKey: e.target.value })}
+                        placeholder="Paste your private key (PEM format)"
+                        rows={5}
+                        className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {testResult?.id === 'unsaved' && (

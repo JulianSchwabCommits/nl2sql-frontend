@@ -8,6 +8,11 @@ export interface DatabaseConnection {
   database: string
   username: string
   ssl: boolean
+  sshEnabled: boolean
+  sshHost?: string
+  sshPort?: number
+  sshUsername?: string
+  sshAuthMethod?: 'password' | 'privateKey'
   createdAt: string
   updatedAt: string
 }
@@ -20,6 +25,13 @@ export interface CreateConnectionDto {
   username: string
   password: string
   ssl?: boolean
+  sshEnabled?: boolean
+  sshHost?: string
+  sshPort?: number
+  sshUsername?: string
+  sshAuthMethod?: 'password' | 'privateKey'
+  sshPassword?: string
+  sshPrivateKey?: string
 }
 
 export interface UpdateConnectionDto {
@@ -30,6 +42,13 @@ export interface UpdateConnectionDto {
   username?: string
   password?: string
   ssl?: boolean
+  sshEnabled?: boolean
+  sshHost?: string
+  sshPort?: number
+  sshUsername?: string
+  sshAuthMethod?: 'password' | 'privateKey'
+  sshPassword?: string
+  sshPrivateKey?: string
 }
 
 export interface TestConnectionResult {
