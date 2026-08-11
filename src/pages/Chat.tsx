@@ -3,7 +3,7 @@ import { useChat } from '@/hooks/useChat'
 import { useChatStore } from '@/stores/chatStore'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { ArrowUp, Loader2, AlertCircle, X, ChevronDown, ChevronRight, Terminal, Square } from 'lucide-react'
+import { ArrowUp, Loader2, AlertCircle, X, ChevronDown, ChevronRight, Terminal, Square, Copy, Check, RefreshCw } from 'lucide-react'
 import type { QueryExecution, ToolCallRecord } from '@/stores/chatStore'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -11,7 +11,7 @@ import TextareaAutosize from 'react-textarea-autosize'
 import { useAuthStore } from '@/stores/authStore'
 
 export default function Chat() {
-  const { messages, isLoading, sendMessage, cancelMessage, error, clearError, toolCalls } = useChat()
+  const { messages, isLoading, sendMessage, cancelMessage, regenerate, error, clearError, toolCalls } = useChat()
   const isLoadingConversation = useChatStore((s) => s.isLoadingConversation)
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -62,8 +62,13 @@ export default function Chat() {
           />
         ) : (
           <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-            {messages.map((msg) => (
-              <div key={msg.id} className="flex gap-3">
+            {messages.map((msg, msgIndex) => {
+              // Check if this is the last assistant message
+              let lastAssistantIdx = -1
+              for (let i = messages.length - 1; i >= 0; i--) { if (messages[i].role === 'assistant') { lastAssistantIdx = i; break } }
+              const isLastAssistant = msg.role === 'assistant' && msgIndex === lastAssistantIdx
+              return (
+              <div key={msg.id} className="group flex gap-3">
                 <div
                   className={`flex items-center justify-center h-7 w-7 rounded-full shrink-0 text-xs font-medium ${
                     msg.role === 'user'
@@ -101,9 +106,18 @@ export default function Chat() {
                   {msg.toolCalls && msg.toolCalls.length > 0 && (
                     <ToolsDropdown queries={msg.queries || []} toolCalls={msg.toolCalls} />
                   )}
+                  {/* Action buttons for assistant messages */}
+                  {msg.role === 'assistant' && !isLoading && (
+                    <MessageActions
+                      content={msg.content}
+                      showRegenerate={isLastAssistant}
+                      onRegenerate={regenerate}
+                    />
+                  )}
                 </div>
               </div>
-            ))}
+              )
+            })}
             {isLoading && (
               <div className="flex gap-3">
                 <div className="flex items-center justify-center h-7 w-7 rounded-full shrink-0 bg-muted">
@@ -215,6 +229,49 @@ function ThinkingIndicator() {
     <div className="flex items-center gap-2 text-sm text-muted-foreground">
       <Loader2 className="h-3.5 w-3.5 animate-spin" />
       <span>Thinking{'.'.repeat(dots)}</span>
+    </div>
+  )
+}
+
+function MessageActions({ content, showRegenerate, onRegenerate }: { content: string; showRegenerate: boolean; onRegenerate: () => void }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea')
+      textarea.value = content
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      <button
+        onClick={handleCopy}
+        className="flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+        title="Copy response"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+      {showRegenerate && (
+        <button
+          onClick={onRegenerate}
+          className="flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          title="Regenerate response"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   )
 }

@@ -31,6 +31,7 @@ export function useChat() {
     loadingConversations,
     setLoading,
     addMessageToConversation,
+    removeLastAssistantMessage,
   } = useChatStore()
 
   const { createConversation, fetchConversation } = useChatApi()
@@ -261,11 +262,59 @@ export function useChat() {
     setLoading(activeConversationId, false)
   }, [activeConversationId, loadingConversations, setLoading])
 
+  const regenerate = useCallback(() => {
+    if (!activeConversationId || isLoading) return
+
+    const conv = useChatStore.getState().loadedConversations[activeConversationId]
+    if (!conv) return
+
+    // Find the last user message
+    const lastUserMsg = [...conv.messages].reverse().find((m) => m.role === 'user')
+    if (!lastUserMsg) return
+
+    // Remove the last assistant message
+    removeLastAssistantMessage(activeConversationId)
+
+    // Re-send the last user prompt via WebSocket (don't add user message again)
+    setLoading(activeConversationId, true)
+    setError(null)
+
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('agent:chat', { prompt: lastUserMsg.content, conversationId: activeConversationId })
+
+      const targetConvId = activeConversationId
+      const timeout = setTimeout(() => {
+        if (useChatStore.getState().loadingConversations.has(targetConvId)) {
+          const timeoutMessage: ChatMessage = {
+            id: generateUUID(),
+            role: 'assistant',
+            content: 'Error: Request timed out. The server took too long to respond.',
+            timestamp: new Date().toISOString(),
+          }
+          addMessageToConversation(targetConvId, timeoutMessage)
+          setLoading(targetConvId, false)
+          setError('Request timed out')
+        }
+      }, 60000)
+
+      const unsub = useChatStore.subscribe((state) => {
+        if (!state.loadingConversations.has(targetConvId)) {
+          clearTimeout(timeout)
+          unsub()
+        }
+      })
+    } else {
+      setLoading(activeConversationId, false)
+      setError('Not connected')
+    }
+  }, [activeConversationId, isLoading, removeLastAssistantMessage, addMessageToConversation, setLoading])
+
   return {
     messages: activeConversation?.messages ?? [],
     isLoading,
     sendMessage,
     cancelMessage,
+    regenerate,
     activeConversationId,
     connectionStatus,
     error,

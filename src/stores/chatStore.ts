@@ -80,6 +80,9 @@ interface ChatState {
   setLoading: (conversationId: string, loading: boolean) => void
   isConversationLoading: (conversationId: string) => boolean
 
+  // Actions: message removal (for regenerate)
+  removeLastAssistantMessage: (conversationId: string) => ChatMessage | null
+
   // Actions: reset
   reset: () => void
 }
@@ -201,6 +204,29 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   isConversationLoading: (conversationId) => {
     return get().loadingConversations.has(conversationId)
+  },
+
+  removeLastAssistantMessage: (conversationId) => {
+    const state = get()
+    const conv = state.loadedConversations[conversationId]
+    if (!conv) return null
+
+    // Find last assistant message
+    let lastIdx = -1
+    for (let i = conv.messages.length - 1; i >= 0; i--) { if (conv.messages[i].role === 'assistant') { lastIdx = i; break } }
+    if (lastIdx === -1) return null
+
+    const removed = conv.messages[lastIdx]
+    const updatedMessages = conv.messages.filter((_, i) => i !== lastIdx)
+
+    set({
+      loadedConversations: {
+        ...state.loadedConversations,
+        [conversationId]: { ...conv, messages: updatedMessages },
+      },
+    })
+
+    return removed
   },
 
   reset: () =>
