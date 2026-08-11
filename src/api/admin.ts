@@ -2,6 +2,12 @@ import type { PendingUser, AdminUser } from '@/types/auth'
 import api from './auth'
 import { useAuthStore } from '@/stores/authStore'
 
+export interface AppDefault {
+  key: string
+  value: string
+  updatedAt: string
+}
+
 export const adminService = {
   login: async (email: string, password: string) => {
     const { data } = await api.post<{ accessToken: string; email: string; name: string | null }>(
@@ -61,6 +67,27 @@ export const adminService = {
 
   resetUserPassword: async (userId: string, password: string) => {
     const { data } = await api.patch<{ message: string }>(`/admin/users/${userId}/password`, { password })
+    return data
+  },
+
+  // Defaults
+  getDefaults: async () => {
+    const { data } = await api.get<AppDefault[]>('/admin/defaults')
+    return data
+  },
+
+  getDefault: async (key: string) => {
+    const { data } = await api.get<{ key: string; value: string }>(`/admin/defaults/${key}`)
+    return data
+  },
+
+  setDefault: async (key: string, value: string) => {
+    const { data } = await api.put<{ key: string; value: string }>(`/admin/defaults/${key}`, { value })
+    return data
+  },
+
+  restoreDefault: async (key: string) => {
+    const { data } = await api.post<{ key: string; value: string; restored: boolean }>(`/admin/defaults/${key}/restore`)
     return data
   },
 

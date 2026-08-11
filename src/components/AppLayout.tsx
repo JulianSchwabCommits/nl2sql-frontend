@@ -33,6 +33,8 @@ import {
   Bot,
   Database,
   Sparkles,
+  Users,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { generateUUID } from '@/lib/utils'
@@ -65,6 +67,8 @@ export function AppLayout() {
   const chatListRef = useRef<HTMLDivElement>(null)
 
   const isSettingsPage = location.pathname.startsWith('/settings')
+  const isAdminPage = location.pathname.startsWith('/admin')
+  const isSidebarPage = isSettingsPage || isAdminPage
 
   const settingsNavItems = [
     { label: 'General', path: '/settings', icon: Settings },
@@ -74,7 +78,15 @@ export function AppLayout() {
     { label: 'Personalization', path: '/settings/personalization', icon: Sparkles },
   ]
 
-  const isSettingsActive = (path: string) => {
+  const adminNavItems = [
+    { label: 'Users', path: '/admin/users', icon: Users },
+    { label: 'Defaults', path: '/admin/defaults', icon: SlidersHorizontal },
+  ]
+
+  const sidebarNavItems = isAdminPage ? adminNavItems : settingsNavItems
+  const sidebarTitle = isAdminPage ? 'Admin' : 'Settings'
+
+  const isNavActive = (path: string) => {
     if (path === '/settings') return location.pathname === '/settings'
     return location.pathname.startsWith(path)
   }
@@ -174,7 +186,7 @@ export function AppLayout() {
 
             {/* Action buttons */}
             <div className="px-2 pb-3 space-y-2">
-              {isSettingsPage ? (
+              {isSidebarPage ? (
                 <>
                   <Button
                     onClick={() => navigate('/chat')}
@@ -185,7 +197,7 @@ export function AppLayout() {
                   >
                     <ArrowLeft className="h-5 w-5" />
                   </Button>
-                  {settingsNavItems.map((item) => {
+                  {sidebarNavItems.map((item) => {
                     const Icon = item.icon
                     return (
                       <Button
@@ -193,7 +205,7 @@ export function AppLayout() {
                         onClick={() => navigate(item.path)}
                         variant="ghost"
                         size="icon"
-                        className={`w-full h-10 ${isSettingsActive(item.path) ? 'bg-accent' : ''}`}
+                        className={`w-full h-10 ${isNavActive(item.path) ? 'bg-accent' : ''}`}
                         title={item.label}
                       >
                         <Icon className="h-4 w-4" />
@@ -249,7 +261,7 @@ export function AppLayout() {
                   {user?.role === 'ADMIN' && (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => navigate('/admin')}>
+                      <DropdownMenuItem onSelect={() => navigate('/admin/users')}>
                         <Shield className="mr-2 h-4 w-4" />
                         Admin
                       </DropdownMenuItem>
@@ -287,7 +299,7 @@ export function AppLayout() {
             </div>
 
             {/* New Chat/Search OR Settings Nav */}
-            {isSettingsPage ? (
+            {isSidebarPage ? (
               <>
                 <div className="px-3 pb-3">
                   <Button
@@ -302,14 +314,14 @@ export function AppLayout() {
 
                 <div className="px-3 py-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 py-2">
-                    Settings
+                    {sidebarTitle}
                   </p>
                 </div>
 
                 <nav className="flex-1 px-3 space-y-1">
-                  {settingsNavItems.map((item) => {
+                  {sidebarNavItems.map((item) => {
                     const Icon = item.icon
-                    const active = isSettingsActive(item.path)
+                    const active = isNavActive(item.path)
                     return (
                       <button
                         key={item.path}
@@ -498,7 +510,7 @@ export function AppLayout() {
                   {user?.role === 'ADMIN' && (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => navigate('/admin')}>
+                      <DropdownMenuItem onSelect={() => navigate('/admin/users')}>
                         <Shield className="mr-2 h-4 w-4" />
                         Admin
                       </DropdownMenuItem>

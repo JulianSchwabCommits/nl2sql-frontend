@@ -4,6 +4,7 @@ import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import Chat from '@/pages/Chat'
 import AdminDashboard from '@/pages/AdminDashboard'
+import AdminDefaults from '@/pages/admin/AdminDefaults'
 import General from '@/pages/settings/General'
 import ProfileSettings from '@/pages/settings/ProfileSettings'
 import LlmSettingsPage from '@/pages/settings/LlmSettings'
@@ -30,7 +31,9 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
               <Route path="/chat" element={<Chat />} />
-              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
+              <Route path="/admin/users" element={<AdminDashboard />} />
+              <Route path="/admin/defaults" element={<AdminDefaults />} />
               <Route path="/dashboard" element={<Navigate to="/chat" replace />} />
               <Route path="/settings" element={<General />} />
               <Route path="/settings/profile" element={<ProfileSettings />} />
