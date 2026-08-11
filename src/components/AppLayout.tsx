@@ -26,9 +26,13 @@ import {
   Search,
   PanelLeftClose,
   Shield,
-  Database,
   Loader2,
   AlertCircle,
+  ArrowLeft,
+  User,
+  Bot,
+  Database,
+  Sparkles,
 } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { generateUUID } from '@/lib/utils'
@@ -59,6 +63,21 @@ export function AppLayout() {
   const [searchQuery, setSearchQuery] = useState('')
 
   const chatListRef = useRef<HTMLDivElement>(null)
+
+  const isSettingsPage = location.pathname.startsWith('/settings')
+
+  const settingsNavItems = [
+    { label: 'General', path: '/settings', icon: Settings },
+    { label: 'Profile', path: '/settings/profile', icon: User },
+    { label: 'LLM', path: '/settings/llm', icon: Bot },
+    { label: 'Databases', path: '/settings/databases', icon: Database },
+    { label: 'Personalization', path: '/settings/personalization', icon: Sparkles },
+  ]
+
+  const isSettingsActive = (path: string) => {
+    if (path === '/settings') return location.pathname === '/settings'
+    return location.pathname.startsWith(path)
+  }
 
   // Fetch conversations on mount
   useEffect(() => {
@@ -155,25 +174,56 @@ export function AppLayout() {
 
             {/* Action buttons */}
             <div className="px-2 pb-3 space-y-2">
-              <Button
-                onClick={handleNewChat}
-                variant="ghost"
-                size="icon"
-                className="w-full h-11"
-                title="New chat"
-              >
-                <SquarePen className="h-5 w-5" />
-              </Button>
+              {isSettingsPage ? (
+                <>
+                  <Button
+                    onClick={() => navigate('/chat')}
+                    variant="ghost"
+                    size="icon"
+                    className="w-full h-11"
+                    title="Back to Chat"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </Button>
+                  {settingsNavItems.map((item) => {
+                    const Icon = item.icon
+                    return (
+                      <Button
+                        key={item.path}
+                        onClick={() => navigate(item.path)}
+                        variant="ghost"
+                        size="icon"
+                        className={`w-full h-10 ${isSettingsActive(item.path) ? 'bg-accent' : ''}`}
+                        title={item.label}
+                      >
+                        <Icon className="h-4 w-4" />
+                      </Button>
+                    )
+                  })}
+                </>
+              ) : (
+                <>
+                  <Button
+                    onClick={handleNewChat}
+                    variant="ghost"
+                    size="icon"
+                    className="w-full h-11"
+                    title="New chat"
+                  >
+                    <SquarePen className="h-5 w-5" />
+                  </Button>
 
-              <Button
-                onClick={() => setIsSearchOpen(true)}
-                variant="ghost"
-                size="icon"
-                className="w-full h-10"
-                title="Search chats"
-              >
-                <Search className="h-4 w-4" />
-              </Button>
+                  <Button
+                    onClick={() => setIsSearchOpen(true)}
+                    variant="ghost"
+                    size="icon"
+                    className="w-full h-10"
+                    title="Search chats"
+                  >
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
 
             {/* Spacer */}
@@ -192,13 +242,9 @@ export function AppLayout() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="right" align="end" className="w-56">
-                  <DropdownMenuItem onSelect={() => navigate('/profile')}>
+                  <DropdownMenuItem onSelect={() => navigate('/settings')}>
                     <Settings className="mr-2 h-4 w-4" />
-                    Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => navigate('/connections')}>
-                    <Database className="mr-2 h-4 w-4" />
-                    Database
+                    Settings
                   </DropdownMenuItem>
                   {user?.role === 'ADMIN' && (
                     <>
@@ -240,32 +286,74 @@ export function AppLayout() {
               </Button>
             </div>
 
-            {/* New Chat and Search */}
-            <div className="px-3 pb-3 space-y-2">
-              <Button
-                onClick={handleNewChat}
-                className="w-full justify-start gap-3 h-11 font-medium"
-                variant="outline"
-              >
-                <SquarePen className="h-5 w-5" />
-                New chat
-              </Button>
+            {/* New Chat/Search OR Settings Nav */}
+            {isSettingsPage ? (
+              <>
+                <div className="px-3 pb-3">
+                  <Button
+                    onClick={() => navigate('/chat')}
+                    className="w-full justify-start gap-3 h-11 font-medium"
+                    variant="outline"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                    Back to Chat
+                  </Button>
+                </div>
 
-              <button
-                onClick={() => setIsSearchOpen(true)}
-                className="relative w-full h-10 flex items-center gap-2 px-3 rounded-md border border-input bg-secondary text-muted-foreground hover:bg-accent transition-colors"
-              >
-                <Search className="h-4 w-4" />
-                <span className="text-sm">Search chats</span>
-              </button>
-            </div>
+                <div className="px-3 py-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 py-2">
+                    Settings
+                  </p>
+                </div>
 
-            {/* Chat list */}
-            <div
-              ref={chatListRef}
-              onScroll={handleScroll}
-              className="flex-1 overflow-y-auto px-2 space-y-1"
-            >
+                <nav className="flex-1 px-3 space-y-1">
+                  {settingsNavItems.map((item) => {
+                    const Icon = item.icon
+                    const active = isSettingsActive(item.path)
+                    return (
+                      <button
+                        key={item.path}
+                        onClick={() => navigate(item.path)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                          active
+                            ? 'bg-accent text-accent-foreground font-medium'
+                            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        {item.label}
+                      </button>
+                    )
+                  })}
+                </nav>
+              </>
+            ) : (
+              <>
+                <div className="px-3 pb-3 space-y-2">
+                  <Button
+                    onClick={handleNewChat}
+                    className="w-full justify-start gap-3 h-11 font-medium"
+                    variant="outline"
+                  >
+                    <SquarePen className="h-5 w-5" />
+                    New chat
+                  </Button>
+
+                  <button
+                    onClick={() => setIsSearchOpen(true)}
+                    className="relative w-full h-10 flex items-center gap-2 px-3 rounded-md border border-input bg-secondary text-muted-foreground hover:bg-accent transition-colors"
+                  >
+                    <Search className="h-4 w-4" />
+                    <span className="text-sm">Search chats</span>
+                  </button>
+                </div>
+
+                {/* Chat list */}
+                <div
+                  ref={chatListRef}
+                  onScroll={handleScroll}
+                  className="flex-1 overflow-y-auto px-2 space-y-1"
+                >
               {isLoadingList ? (
                 <div className="px-3 py-12 text-center">
                   <Loader2 className="h-6 w-6 mx-auto animate-spin text-muted-foreground mb-3" />
@@ -379,6 +467,8 @@ export function AppLayout() {
                 </>
               )}
             </div>
+              </>
+            )}
 
             {/* User profile */}
             <div className="p-3">
@@ -401,13 +491,9 @@ export function AppLayout() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="top" align="start" className="w-56">
-                  <DropdownMenuItem onSelect={() => navigate('/profile')}>
+                  <DropdownMenuItem onSelect={() => navigate('/settings')}>
                     <Settings className="mr-2 h-4 w-4" />
-                    Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => navigate('/connections')}>
-                    <Database className="mr-2 h-4 w-4" />
-                    Database
+                    Settings
                   </DropdownMenuItem>
                   {user?.role === 'ADMIN' && (
                     <>

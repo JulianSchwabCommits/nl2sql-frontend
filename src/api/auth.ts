@@ -1,5 +1,15 @@
 import axios from 'axios'
 import type { AuthResponse, LoginDto, RegisterDto, SignupResponse, User } from '@/types/auth'
+
+export interface UpdateProfileDto {
+  name?: string
+  email?: string
+}
+
+export interface ChangePasswordDto {
+  currentPassword: string
+  newPassword: string
+}
 import { useAuthStore } from '@/stores/authStore'
 
 const api = axios.create({
@@ -51,6 +61,8 @@ export const authApi = {
   refresh: () => api.post<AuthResponse>('/auth/refresh'),
   logout: () => api.post('/auth/logout'),
   profile: () => api.get<User>('/auth/profile'),
+  updateProfile: (dto: UpdateProfileDto) => api.patch<User>('/auth/profile', dto),
+  changePassword: (dto: ChangePasswordDto) => api.post('/auth/change-password', dto),
   deleteAccount: () => api.delete('/auth/profile'),
 }
 
